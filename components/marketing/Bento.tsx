@@ -89,7 +89,7 @@ export function Bento() {
                 className={`w-10 h-10 rounded-2xl flex items-center justify-center mb-4 ${
                   tile.accent
                     ? "bg-white/20"
-                    : "bg-[var(--color-accent-soft)] dark:bg-[rgba(228,0,70,0.12)]"
+                    : "bg-[var(--color-accent-soft)]"
                 }`}
               >
                 <Icon

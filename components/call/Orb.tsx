@@ -28,10 +28,10 @@ export function Orb({ onPress, level = 0 }: OrbProps) {
         className="absolute inset-0 rounded-full"
         animate={{
           boxShadow: isListening
-            ? `0 0 0 ${8 + level * 20}px rgba(228,0,70,0.15)`
+            ? `0 0 0 ${8 + level * 20}px rgba(14,165,233,0.2)`
             : isSpeaking
-            ? "0 0 0 12px rgba(16,185,129,0.15)"
-            : "0 0 0 0px rgba(228,0,70,0)",
+            ? "0 0 0 12px rgba(16,185,129,0.2)"
+            : "0 0 0 0px rgba(2,132,199,0)",
         }}
         transition={{ duration: 0.1 }}
       />
@@ -47,9 +47,9 @@ export function Orb({ onPress, level = 0 }: OrbProps) {
         className="relative w-24 h-24 rounded-full overflow-hidden flex items-center justify-center"
         style={{
           background:
-            "radial-gradient(circle at 35% 35%, #FF4F7E, #E40046 60%, #8B0029)",
+            "radial-gradient(circle at 35% 35%, #38BDF8, #0284C7 60%, #0369A1)",
           boxShadow:
-            "0 4px 24px rgba(228,0,70,0.4), inset 0 1px 0 rgba(255,255,255,0.3)",
+            "0 4px 24px rgba(2,132,199,0.35), inset 0 1px 0 rgba(255,255,255,0.4)",
         }}
       >
         {/* Inner waveform when speaking */}

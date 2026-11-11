@@ -1,62 +1,57 @@
 /**
  * app/globals.css
- * Design tokens for Munim — Tailwind v4 CSS variables.
+ * Fluid Light-Mode Design tokens for Munim — Sky-Blue aesthetic.
  */
 @import "tailwindcss";
 
 @theme {
-  /* ── Canvas & Surfaces ── */
-  --color-canvas: #FAFAF8;
+  /* ── Canvas & Surfaces (Crisp light) ── */
+  --color-canvas: #F8FAFC;
   --color-surface: #FFFFFF;
-  --color-surface-raised: #F5F5F2;
+  --color-surface-raised: #F0F7FF;
 
   /* ── Ink ── */
-  --color-ink: #16171A;
-  --color-ink-muted: #6B6F76;
-  --color-ink-faint: #9EA3A9;
-  --color-hairline: #ECECE8;
+  --color-ink: #0F172A;
+  --color-ink-muted: #475569;
+  --color-ink-faint: #94A3B8;
+  --color-hairline: #E2E8F0;
 
-  /* ── Accent ── */
-  --color-accent: #E40046;
-  --color-accent-soft: #FFE9EF;
-  --color-accent-hover: #C5003D;
+  /* ── Accent (Sky / Cyan Blue) ── */
+  --color-accent: #0284C7;
+  --color-accent-soft: #E0F2FE;
+  --color-accent-hover: #0369A1;
 
   /* ── Semantic ── */
-  --color-success: #12805C;
-  --color-success-soft: #E6F5EF;
-  --color-warning: #B45309;
+  --color-success: #059669;
+  --color-success-soft: #ECFDF5;
+  --color-warning: #D97706;
   --color-warning-soft: #FEF3C7;
   --color-error: #DC2626;
 
   /* ── Radius ── */
   --radius-pill: 9999px;
   --radius-card: 24px;
-  --radius-sm: 12px;
+  --radius-sm: 14px;
 
-  /* ── Shadows ── */
-  --shadow-card: 0 1px 0 rgba(0,0,0,.04), 0 12px 32px -12px rgba(0,0,0,.12);
-  --shadow-float: 0 2px 0 rgba(0,0,0,.04), 0 24px 48px -16px rgba(0,0,0,.18);
+  /* ── Fluid Shadows ── */
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 12px 32px -8px rgba(14, 165, 233, 0.08);
+  --shadow-float: 0 4px 6px -1px rgba(15, 23, 42, 0.05), 0 20px 40px -12px rgba(2, 132, 199, 0.14);
+  --shadow-orb: 0 8px 32px rgba(2, 132, 199, 0.35), inset 0 2px 4px rgba(255, 255, 255, 0.6);
 
-  /* ── Dark mode ── */
-  --color-canvas-dark: #0E0F11;
-  --color-surface-dark: #16181B;
-  --color-hairline-dark: #252729;
-  --color-ink-dark: #F0F0EE;
-  --color-ink-muted-dark: #9EA3A9;
+  /* ── Dark fallback (soft muted dark) ── */
+  --color-canvas-dark: #0B111A;
+  --color-surface-dark: #121A26;
+  --color-hairline-dark: #1E293B;
+  --color-ink-dark: #F1F5F9;
+  --color-ink-muted-dark: #94A3B8;
 
-  /* ── Font ── */
+  /* ── Fonts ── */
   --font-sans: var(--font-geist-sans), system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
 :root {
   color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-  }
 }
 
 body {
@@ -66,11 +61,64 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-@media (prefers-color-scheme: dark) {
-  body {
-    background: var(--color-canvas-dark);
-    color: var(--color-ink-dark);
-  }
+/* ── Fluid Hero WebGL Backdrop & CSS Fallback ── */
+.fluid-hero {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+}
+
+.fluid-hero__fallback,
+.fluid-hero__canvas {
+  position: absolute;
+  inset: 0 0 auto;
+  width: 100%;
+  height: 480px;
+  pointer-events: none;
+}
+
+.fluid-hero__fallback {
+  z-index: -1;
+  overflow: hidden;
+  background:
+    linear-gradient(to bottom, transparent 0%, #F8FAFC 100%),
+    radial-gradient(ellipse at 22% 12%, rgb(91 177 218 / 62%) 0%, transparent 54%),
+    radial-gradient(ellipse at 76% 10%, rgb(40 126 170 / 48%) 0%, transparent 58%),
+    linear-gradient(to bottom, #8bc8e4 0%, #c7e7f4 58%, #F8FAFC 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 38%, transparent 84%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 38%, transparent 84%);
+}
+
+.fluid-hero__fallback::after {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgb(11 73 105 / 32%) 0.8px, transparent 1px);
+  background-size: 4px 4px;
+  content: "";
+}
+
+.fluid-hero__canvas {
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 350ms ease-out;
+}
+
+.fluid-hero__canvas[data-ready="true"] {
+  opacity: 1;
+}
+
+.fluid-hero__content {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Glass Pill Navigation ── */
+.glass-pill {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
 }
 
 /* ── Scrollbar styling ── */
@@ -83,7 +131,7 @@ body {
 }
 ::-webkit-scrollbar-thumb {
   background: var(--color-hairline);
-  border-radius: 2px;
+  border-radius: 4px;
 }
 
 /* ── Focus rings ── */
@@ -98,5 +146,8 @@ body {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+  .fluid-hero__canvas {
+    transition: none;
   }
 }
