@@ -6,7 +6,7 @@
  * Falls back to { text: "", error: "..." } on failure.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { GNANI_STT_URL, GNANI_LANG_CODES } from "@/lib/voice/gnani";
+import { GNANI_STT_URL, GNANI_LANG_CONFIG } from "@/lib/voice/gnani";
 import type { SupportedLanguage } from "@/lib/voice/provider";
 
 export const maxDuration = 30;
@@ -54,44 +54,77 @@ export async function POST(req: NextRequest) {
 
   const apiKey = process.env.GNANI_API_KEY;
   if (!apiKey) {
-    // No Gnani key — return empty to trigger browser fallback
     return NextResponse.json(
       { error: "Gnani not configured", code: "PROVIDER_UNAVAILABLE" },
       { status: 503 }
     );
   }
 
-  const langCode = GNANI_LANG_CODES[lang];
+  const langConfig = GNANI_LANG_CONFIG[lang] ?? GNANI_LANG_CONFIG.hinglish;
 
   // Build form for Gnani
   const gnaniForm = new FormData();
-  const blob = await audioFile.arrayBuffer().then((ab) => new Blob([ab], { type: audioFile.type }));
+  const blob = await audioFile
+    .arrayBuffer()
+    .then((ab) => new Blob([ab], { type: audioFile.type }));
+
   gnaniForm.append("audio_file", blob, audioFile.name || "audio.webm");
   gnaniForm.append("model", "prisma-v2.5");
-  gnaniForm.append("language_code", langCode);
+  gnaniForm.append("language_code", langConfig.language_code);
+  if (langConfig.multi_lang_codes) {
+    gnaniForm.append("multi_lang_codes", langConfig.multi_lang_codes);
+  }
   gnaniForm.append("format", "transcribe");
 
   try {
-    const res = await fetch(GNANI_STT_URL, {
+    let res = await fetch(GNANI_STT_URL, {
       method: "POST",
       headers: { "X-API-Key-ID": apiKey },
       body: gnaniForm,
     });
 
+    // Retry once on 429 concurrency limit
+    if (res.status === 429) {
+      console.warn("[STT] Gnani 429 received, retrying in 350ms...");
+      await new Promise((r) => setTimeout(r, 350));
+      res = await fetch(GNANI_STT_URL, {
+        method: "POST",
+        headers: { "X-API-Key-ID": apiKey },
+        body: gnaniForm,
+      });
+    }
+
     if (!res.ok) {
       const errText = await res.text();
       console.error("[STT] Gnani error:", res.status, errText);
       return NextResponse.json(
-        { error: "STT provider error", code: "PROVIDER_ERROR" },
-        { status: 502 }
+        { error: "STT provider error", code: "PROVIDER_ERROR", details: errText },
+        { status: res.status === 429 ? 429 : 502 }
       );
     }
 
     const json = await res.json();
-    const text: string =
-      json?.text ?? json?.transcript ?? json?.results?.[0]?.transcript ?? "";
+    let text = "";
 
-    return NextResponse.json({ text: text.trim(), lang });
+    if (typeof json?.transcript === "string") {
+      text = json.transcript;
+    } else if (json?.transcript && typeof json.transcript === "object") {
+      // For indic-auto, transcript is an object: { "hi-IN": "...", "en-IN": "..." }
+      text =
+        json.transcript["hi-IN"] ||
+        json.transcript["en-IN"] ||
+        Object.values(json.transcript).find(
+          (v) => typeof v === "string" && v.trim().length > 0
+        ) ||
+        "";
+    } else {
+      text =
+        json?.text ??
+        json?.results?.[0]?.transcript ??
+        "";
+    }
+
+    return NextResponse.json({ text: (text as string).trim(), lang });
   } catch (err) {
     console.error("[STT] fetch error:", err);
     return NextResponse.json(
@@ -100,4 +133,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-

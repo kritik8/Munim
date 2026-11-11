@@ -53,6 +53,7 @@ interface MunimStore {
   callState: CallState;
   phase: ConversationPhase;
   language: Language;
+  voiceProvider: "gnani" | "browser";
   muted: boolean;
   callStartedAt: number | null;
   latency: LatencyReadout;
@@ -73,6 +74,7 @@ interface MunimStore {
   setCallState: (state: CallState) => void;
   setPhase: (phase: ConversationPhase) => void;
   setLanguage: (lang: Language) => void;
+  setVoiceProvider: (provider: "gnani" | "browser") => void;
   setMuted: (muted: boolean) => void;
   setLatency: (l: Partial<LatencyReadout>) => void;
   setActiveTab: (tab: MunimStore["activeTab"]) => void;
@@ -97,6 +99,7 @@ const initialState = {
   callState: "idle" as CallState,
   phase: "greet" as ConversationPhase,
   language: "hinglish" as Language,
+  voiceProvider: "gnani" as "gnani" | "browser",
   muted: false,
   callStartedAt: null as number | null,
   latency: {} as LatencyReadout,
@@ -120,6 +123,7 @@ export const useMunimStore = create<MunimStore>((set) => ({
 
   setPhase: (phase) => set({ phase }),
   setLanguage: (language) => set({ language }),
+  setVoiceProvider: (voiceProvider) => set({ voiceProvider }),
   setMuted: (muted) => set({ muted }),
   setLatency: (l) => set((s) => ({ latency: { ...s.latency, ...l } })),
   setActiveTab: (activeTab) => set({ activeTab }),

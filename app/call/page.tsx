@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useMunimStore } from "@/lib/store";
 import { VAD } from "@/lib/voice/vad";
 import { AudioPlayer } from "@/lib/voice/player";
+import { voiceCoordinator } from "@/lib/voice/coordinator";
 import { toSpoken } from "@/lib/voice/toSpoken";
 import type { ConversationPhase } from "@/lib/agent/prompt";
 import { CallShelf } from "@/components/call/CallShelf";
@@ -61,6 +62,9 @@ export default function CallPage() {
   const chatAbortRef = useRef<AbortController | null>(null);
   const munimMsgIdRef = useRef<string | null>(null);
   const ttsLangRef = useRef("hinglish");
+  const isTranscribingRef = useRef(false);
+  const consecutiveErrorsRef = useRef(0);
+  const hasShownFallbackToastRef = useRef(false);
 
   // Keep TTS lang in sync
   useEffect(() => {
@@ -80,6 +84,8 @@ export default function CallPage() {
   // ── Send text to LLM and stream response ──────────────────────────────────
   const sendToLLM = useCallback(
     async (userText: string) => {
+      // Pause VAD while Munim is thinking or replying
+      vadRef.current?.pause();
       store.setCallState("thinking");
       chatAbortRef.current?.abort();
       chatAbortRef.current = new AbortController();
@@ -156,6 +162,14 @@ export default function CallPage() {
             }
 
             switch (evt.event) {
+              case "ttft": {
+                if (!firstToken) {
+                  firstToken = true;
+                  setLatency((l) => ({ ...l, llm: evt.ttft as number }));
+                }
+                break;
+              }
+
               case "text_delta": {
                 if (!firstToken) {
                   firstToken = true;
@@ -168,10 +182,8 @@ export default function CallPage() {
 
               case "sentence": {
                 const spoken = toSpoken(evt.text as string);
-                // Enqueue for TTS (non-blocking)
-                playerRef.current
-                  ?.enqueue(spoken, ttsLangRef.current)
-                  .catch(() => {});
+                // Enqueue for serial TTS (sentence N+1 synthesizes only after sentence N finishes)
+                playerRef.current?.enqueue(spoken, ttsLangRef.current);
                 break;
               }
 
@@ -186,13 +198,11 @@ export default function CallPage() {
                   status: "running",
                   ts: Date.now(),
                 });
-                // Store the tool_call_id → actionId mapping
                 (evt as Record<string, unknown>)._actionId = actionId;
                 break;
               }
 
               case "tool_result": {
-                // Find matching action by tool name + find running one
                 const matchingAction = actions
                   .slice()
                   .reverse()
@@ -204,7 +214,6 @@ export default function CallPage() {
                     result,
                   });
 
-                  // Handle summary
                   if (evt.name === "end_call_with_summary" && result.summary) {
                     const s = result.summary as {
                       issues: string[];
@@ -234,6 +243,7 @@ export default function CallPage() {
 
               case "error": {
                 toast.error("Munim ran into an issue. Try speaking again.");
+                vadRef.current?.resume();
                 store.setCallState("listening");
                 break;
               }
@@ -242,11 +252,11 @@ export default function CallPage() {
         }
 
         store.finalisePartial(munimId, munimText);
-        // Listening resumes after TTS finishes (handled by player onEnd)
       } catch (err) {
         if ((err as Error)?.name === "AbortError") return;
         console.error("[chat]", err);
         toast.error("Connection issue. Speak to try again.");
+        vadRef.current?.resume();
         store.setCallState("listening");
       }
     },
@@ -254,25 +264,48 @@ export default function CallPage() {
     [phase, transcript, actions]
   );
 
-  // ── REST STT via Gnani or browser fallback ────────────────────────────────
+  // ── REST STT via Gnani with global lock & failure threshold ───────────────
   const transcribeBlob = useCallback(
     async (blob: Blob): Promise<string | null> => {
-      if (usesBrowserFallback) return null; // handled separately
+      if (usesBrowserFallback || isTranscribingRef.current) return null;
 
+      isTranscribingRef.current = true;
       const sttStart = Date.now();
+
+      // Acquire global lock so STT never collides with TTS
+      const releaseLock = await voiceCoordinator.acquire("stt");
+
       try {
         const form = new FormData();
         form.append("audio", blob, "audio.webm");
         form.append("lang", language);
+
         const res = await fetch("/api/stt", { method: "POST", body: form });
-        if (!res.ok) throw new Error(await res.text());
+
+        if (!res.ok) {
+          const errText = await res.text();
+          console.warn("[STT] fetch status:", res.status, errText);
+          consecutiveErrorsRef.current++;
+          if (consecutiveErrorsRef.current >= 2) {
+            activateBrowserFallback();
+          }
+          return null;
+        }
+
         const json = await res.json();
+        consecutiveErrorsRef.current = 0; // reset on success
         setLatency((l) => ({ ...l, stt: Date.now() - sttStart }));
         return (json.text as string) || null;
-      } catch {
-        // Try browser fallback
-        activateBrowserFallback();
+      } catch (err) {
+        console.error("[STT] network error:", err);
+        consecutiveErrorsRef.current++;
+        if (consecutiveErrorsRef.current >= 2) {
+          activateBrowserFallback();
+        }
         return null;
+      } finally {
+        releaseLock();
+        isTranscribingRef.current = false;
       }
     },
     [language, usesBrowserFallback]
@@ -281,41 +314,62 @@ export default function CallPage() {
   const activateBrowserFallback = useCallback(() => {
     if (usesBrowserFallback) return;
     setUsesBrowserFallback(true);
-    toast.info("Switched to browser speech (Gnani unavailable).");
-  }, [usesBrowserFallback]);
+    store.setVoiceProvider("browser");
+    if (!hasShownFallbackToastRef.current) {
+      hasShownFallbackToastRef.current = true;
+      toast.info("Switched to browser speech (Gnani unavailable).");
+    }
+  }, [usesBrowserFallback, store]);
 
   // ── Start the call ─────────────────────────────────────────────────────────
   const startCall = useCallback(async () => {
     store.setCallState("connecting");
 
-    // Kick off AudioContext (must happen on user gesture)
+    // AudioPlayer with callbacks that coordinate VAD pausing and latency logging
     playerRef.current = new AudioPlayer({
+      onStart: () => {
+        vadRef.current?.pause();
+        store.setCallState("speaking");
+      },
       onEnd: () => {
-        // After TTS finishes, resume listening (unless call ended)
+        // Resume VAD only when speech playback completes
+        vadRef.current?.resume();
         if (store.callState !== "ended") {
           store.setCallState("listening");
         }
       },
+      onTTSFirstByte: (latencyMs) => {
+        setLatency((l) => ({ ...l, tts: latencyMs }));
+      },
     });
 
-    // Start VAD
+    // Start VAD with adaptive noise calibration and speech thresholds
     try {
       vadRef.current = new VAD({
+        silenceMs: 700,
+        minSpeechDurationMs: 400,
         onLevelChange: setMicLevel,
         onSpeechStart: () => {
           if (playerRef.current?.isPlaying) {
-            // Interrupt TTS
+            // Barge-in: interrupt TTS immediately
             playerRef.current.abort();
+            chatAbortRef.current?.abort();
+            voiceCoordinator.reset();
           }
           store.setCallState("listening");
         },
         onSpeechEnd: async (blob) => {
+          if (isTranscribingRef.current || playerRef.current?.isPlaying) return;
+
           store.setCallState("thinking");
           const text = await transcribeBlob(blob);
           if (text && text.trim().length > 0) {
             await sendToLLM(text.trim());
           } else {
-            store.setCallState("listening");
+            if (store.callState !== "speaking") {
+              vadRef.current?.resume();
+              store.setCallState("listening");
+            }
           }
         },
       });
@@ -324,7 +378,7 @@ export default function CallPage() {
       activateBrowserFallback();
     }
 
-    // Send initial greeting (empty user message triggers proactive greeting)
+    // Proactive greeting turn
     store.setCallState("thinking");
     await sendToLLM("(call started — please greet me proactively with the seller data)");
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -418,16 +472,19 @@ export default function CallPage() {
       // Interrupt
       playerRef.current?.abort();
       chatAbortRef.current?.abort();
+      voiceCoordinator.reset();
+      vadRef.current?.resume();
       store.setCallState("listening");
     } else if (callState === "listening") {
       // Manual push-to-talk stop (do nothing, VAD handles end)
     } else if (callState === "thinking") {
       // Cancel LLM
       chatAbortRef.current?.abort();
+      voiceCoordinator.reset();
+      vadRef.current?.resume();
       store.setCallState("listening");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [callState]);
+  }, [callState, store]);
 
   // ── End call ──────────────────────────────────────────────────────────────
   const endCall = useCallback(() => {
@@ -477,8 +534,9 @@ export default function CallPage() {
               {/* Dev latency readout */}
               {process.env.NODE_ENV === "development" && (
                 <div className="text-[10px] font-mono text-[var(--color-ink-faint)] flex gap-3">
-                  {latency.stt !== undefined && <span>STT {latency.stt}ms</span>}
-                  {latency.llm !== undefined && <span>LLM {latency.llm}ms</span>}
+                  {latency.stt !== undefined && <span>STT: {latency.stt}ms</span>}
+                  {latency.llm !== undefined && <span>TTFT: {latency.llm}ms</span>}
+                  {latency.tts !== undefined && <span>TTS: {latency.tts}ms</span>}
                 </div>
               )}
             </div>

@@ -11,12 +11,32 @@ export const GNANI_BASE = "https://api.vachana.ai";
 export const GNANI_STT_URL = `${GNANI_BASE}/stt/v3`;
 export const GNANI_TTS_SSE_URL = `${GNANI_BASE}/api/v1/tts/sse`;
 
-/** Language codes for Gnani STT */
-export const GNANI_LANG_CODES = {
-  en: "en-IN",
-  hi: "hi-IN",
-  hinglish: "indic-auto", // auto-detect handles Hinglish well
-} as const;
+export interface GnaniLangConfig {
+  language_code: string;
+  multi_lang_codes?: string;
+  tts_lang: string;
+}
+
+/**
+ * Supported language configurations for Gnani Prisma STT and Timbre TTS.
+ * Prisma supported codes: as-IN, bn-IN, en-IN, gu-IN, hi-IN, indic-auto, kn-IN, ml-IN, mr-IN, pa-IN, ta-IN, te-IN.
+ * Note: language_code=indic-auto requires multi_lang_codes="hi-IN,en-IN".
+ */
+export const GNANI_LANG_CONFIG: Record<string, GnaniLangConfig> = {
+  en: {
+    language_code: "en-IN",
+    tts_lang: "en-IN",
+  },
+  hi: {
+    language_code: "hi-IN",
+    tts_lang: "hi-IN",
+  },
+  hinglish: {
+    language_code: "indic-auto",
+    multi_lang_codes: "hi-IN,en-IN",
+    tts_lang: "hi-IN",
+  },
+};
 
 export interface GnaniSTTResponse {
   text: string;
@@ -27,13 +47,18 @@ export interface GnaniSTTResponse {
 /** Build the multipart FormData for Gnani STT */
 export function buildSttFormData(
   audioBlob: Blob,
-  langCode: string,
+  lang: string,
   filename = "audio.webm"
 ): FormData {
   const form = new FormData();
+  const cfg = GNANI_LANG_CONFIG[lang] ?? GNANI_LANG_CONFIG.hinglish;
+
   form.append("audio_file", audioBlob, filename);
   form.append("model", "prisma-v2.5");
-  form.append("language_code", langCode);
+  form.append("language_code", cfg.language_code);
+  if (cfg.multi_lang_codes) {
+    form.append("multi_lang_codes", cfg.multi_lang_codes);
+  }
   form.append("format", "transcribe");
   return form;
 }
@@ -62,4 +87,3 @@ export function buildTtsBody(req: GnaniTTSRequest): string {
     },
   });
 }
-

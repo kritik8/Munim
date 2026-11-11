@@ -43,6 +43,7 @@ function enc(event: string, data: Record<string, unknown>): string {
 }
 
 export async function POST(req: NextRequest) {
+  const turnStart = Date.now();
   let body: z.infer<typeof ChatBodySchema>;
   try {
     const raw = await req.json();
@@ -85,7 +86,8 @@ export async function POST(req: NextRequest) {
 
       let currentPhase: ConversationPhase = phase;
       let iterCount = 0;
-      const MAX_ITERS = 4;
+      const MAX_ITERS = 2; // prevent multi-turn runaway latency
+      let ttftLogged = false;
 
       try {
         while (iterCount < MAX_ITERS) {
@@ -97,7 +99,7 @@ export async function POST(req: NextRequest) {
             tools: TOOL_DEFINITIONS as unknown as OpenAI.ChatCompletionTool[],
             tool_choice: "auto",
             stream: true,
-            max_tokens: 300,
+            max_tokens: 120, // keep max_tokens small (~120) for voice latency
           });
 
           let fullText = "";
@@ -113,12 +115,21 @@ export async function POST(req: NextRequest) {
             if (!delta) continue;
 
             if (delta.content) {
+              if (!ttftLogged) {
+                ttftLogged = true;
+                const ttft = Date.now() - turnStart;
+                console.log(
+                  `[CHAT] TTFT (time-to-first-token): ${ttft}ms (model: ${model})`
+                );
+                send("ttft", { ttft });
+              }
+
               fullText += delta.content;
               sentenceBuffer += delta.content;
               send("text_delta", { text: delta.content });
 
               for (const char of delta.content) {
-                if (isSentenceEnd(char) && sentenceBuffer.trim().length > 5) {
+                if (isSentenceEnd(char) && sentenceBuffer.trim().length > 4) {
                   send("sentence", { text: sentenceBuffer.trim() });
                   sentenceBuffer = "";
                 }
@@ -149,7 +160,6 @@ export async function POST(req: NextRequest) {
           }
 
           if (toolCalls.length > 0) {
-            // Add assistant message with tool calls
             allMessages.push({
               role: "assistant",
               content: fullText || null,
@@ -187,7 +197,6 @@ export async function POST(req: NextRequest) {
             continue;
           }
 
-          // Advance phase after greet greeting
           if (currentPhase === "greet" && fullText.length > 10) {
             currentPhase = "discover";
             send("phase", { phase: currentPhase });
@@ -196,10 +205,16 @@ export async function POST(req: NextRequest) {
           break;
         }
 
+        const totalTime = Date.now() - turnStart;
+        console.log(
+          `[CHAT] Turn completed in ${totalTime}ms (model: ${model})`
+        );
+        send("turn_complete", { totalMs: totalTime });
         send("done", {});
         controller.close();
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error";
+        console.error("[CHAT] error:", message);
         send("error", { error: message, code: "LLM_ERROR" });
         controller.close();
       }

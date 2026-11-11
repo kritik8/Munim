@@ -21,7 +21,7 @@ interface CallShelfProps {
 }
 
 export function CallShelf({ onEnd, onMuteToggle, onInterrupt }: CallShelfProps) {
-  const { callState, phase, muted, callStartedAt } = useMunimStore();
+  const { callState, phase, muted, callStartedAt, voiceProvider } = useMunimStore();
   const [elapsed, setElapsed] = useState("00:00");
   const [expanded, setExpanded] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -72,6 +72,16 @@ export function CallShelf({ onEnd, onMuteToggle, onInterrupt }: CallShelfProps) 
 
         {/* Timer */}
         <span className="font-mono text-sm text-white/70">{elapsed}</span>
+
+        {/* Voice provider badge */}
+        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/10 text-[11px] font-mono text-white/80 select-none">
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              voiceProvider === "gnani" ? "bg-emerald-400" : "bg-amber-400"
+            }`}
+          />
+          Voice: {voiceProvider === "gnani" ? "Gnani" : "Browser"}
+        </div>
 
         {/* Phase label — only when expanded */}
         <AnimatePresence>

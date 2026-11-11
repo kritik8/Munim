@@ -183,3 +183,4 @@ git push origin main
 - **Proactive Outbound Trigger**: Munim initiates a call when stock drops below 7 days of cover, rather than waiting for seller inbound.
 - **Deeper Multi-dialects**: Extend support to Tamil, Telugu, Marathi, and Bengali regional voice models for tier-2/3 Indian merchant hubs.
 - **Direct Snapdeal API Hookup**: Connect real inventory sync and Snapdeal Ads sponsored products campaign creation.
+

@@ -6,8 +6,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { GNANI_TTS_SSE_URL, buildTtsBody, GNANI_LANG_CODES } from "@/lib/voice/gnani";
-import type { SupportedLanguage } from "@/lib/voice/provider";
+import { GNANI_TTS_SSE_URL, buildTtsBody, GNANI_LANG_CONFIG } from "@/lib/voice/gnani";
 
 export const maxDuration = 30;
 
@@ -18,12 +17,9 @@ const TtsBodySchema = z.object({
   lang: z.string().default("hinglish"),
 });
 
-function getLangCode(lang: string): string {
-  const supported: SupportedLanguage[] = ["en", "hi", "hinglish"];
-  const l = supported.includes(lang as SupportedLanguage)
-    ? (lang as SupportedLanguage)
-    : "hinglish";
-  return GNANI_LANG_CODES[l];
+function getTtsLanguage(lang: string): string {
+  const cfg = GNANI_LANG_CONFIG[lang] ?? GNANI_LANG_CONFIG.hinglish;
+  return cfg.tts_lang;
 }
 
 export async function POST(req: NextRequest) {
@@ -48,12 +44,12 @@ export async function POST(req: NextRequest) {
   }
 
   const voice = process.env.GNANI_TTS_VOICE ?? "Nalini";
-  const langCode = getLangCode(lang);
+  const langCode = getTtsLanguage(lang);
 
   const ttsBody = buildTtsBody({ text, voice, language: langCode });
 
   try {
-    const res = await fetch(GNANI_TTS_SSE_URL, {
+    let res = await fetch(GNANI_TTS_SSE_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -62,22 +58,32 @@ export async function POST(req: NextRequest) {
       body: ttsBody,
     });
 
+    // Retry once on 429 concurrency limit
+    if (res.status === 429) {
+      console.warn("[TTS] Gnani 429 received, retrying in 350ms...");
+      await new Promise((r) => setTimeout(r, 350));
+      res = await fetch(GNANI_TTS_SSE_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key-ID": apiKey,
+        },
+        body: ttsBody,
+      });
+    }
+
     if (!res.ok) {
       const errText = await res.text();
       console.error("[TTS] Gnani error:", res.status, errText);
       return NextResponse.json(
-        { error: "TTS provider error", code: "PROVIDER_ERROR" },
-        { status: 502 }
+        { error: "TTS provider error", code: "PROVIDER_ERROR", details: errText },
+        { status: res.status === 429 ? 429 : 502 }
       );
     }
 
-    // Gnani SSE streams audio chunks as base64 in event data.
-    // We collect them and return as a WAV blob.
-    // The SSE format: data: {"audio": "<base64>", "done": false}
     const contentType = res.headers.get("content-type") ?? "";
 
     if (contentType.includes("text/event-stream")) {
-      // Parse SSE stream and collect audio chunks
       const reader = res.body?.getReader();
       if (!reader) {
         return NextResponse.json(
@@ -135,7 +141,6 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // If not SSE, proxy raw audio directly
     if (!res.body) {
       return NextResponse.json(
         { error: "No body from TTS", code: "PROVIDER_ERROR" },
@@ -157,4 +162,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-
