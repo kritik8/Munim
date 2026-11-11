@@ -23,7 +23,7 @@ export function Logo({ size = 36, className = "" }: LogoProps) {
 export function Wordmark({ className = "" }: { className?: string }) {
   return (
     <span
-      className={`font-semibold tracking-tight text-[var(--color-ink)] dark:text-[var(--color-ink-dark)] ${className}`}
+      className={`font-semibold tracking-tight text-[var(--color-ink)] ${className}`}
     >
       {PRODUCT_NAME}
     </span>

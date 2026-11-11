@@ -35,7 +35,7 @@ function MetricCard({
   return (
     <div className="p-4 rounded-2xl border border-[var(--color-hairline)] dark:border-[var(--color-hairline-dark)] bg-[var(--color-surface)] dark:bg-[var(--color-surface-dark)]">
       <div className="text-xs text-[var(--color-ink-faint)] mb-2">{label}</div>
-      <div className="font-semibold text-lg text-[var(--color-ink)] dark:text-[var(--color-ink-dark)]">
+      <div className="font-semibold text-lg text-[var(--color-ink)]">
         {fmt(now)}
       </div>
       <div
@@ -164,14 +164,14 @@ function CauseBar() {
         <div className="flex items-center gap-2 text-xs">
           <div className="w-2.5 h-2.5 rounded-sm bg-[var(--color-accent)] flex-shrink-0" />
           <span className="text-[var(--color-ink-muted)] flex-1">Stock-outs &amp; visibility</span>
-          <span className="font-mono font-medium text-[var(--color-ink)] dark:text-[var(--color-ink-dark)]">
+          <span className="font-mono font-medium text-[var(--color-ink)]">
             {formatINR(diagnosis.stockoutVisibilityLoss)}
           </span>
         </div>
         <div className="flex items-center gap-2 text-xs">
           <div className="w-2.5 h-2.5 rounded-sm bg-[var(--color-warning)] flex-shrink-0" />
           <span className="text-[var(--color-ink-muted)] flex-1">Excess cancellations</span>
-          <span className="font-mono font-medium text-[var(--color-ink)] dark:text-[var(--color-ink-dark)]">
+          <span className="font-mono font-medium text-[var(--color-ink)]">
             {formatINR(diagnosis.cancellationLoss)}
           </span>
         </div>

@@ -43,7 +43,7 @@ export function ToastContainer() {
                 ? "bg-red-50 border border-red-200 text-red-700"
                 : t.type === "success"
                 ? "bg-[var(--color-success-soft)] border border-[var(--color-success)]/30 text-[var(--color-success)]"
-                : "bg-white dark:bg-[var(--color-surface-dark)] border border-[var(--color-hairline)] dark:border-[var(--color-hairline-dark)] text-[var(--color-ink)] dark:text-[var(--color-ink-dark)]"
+                : "bg-white border border-[var(--color-hairline)] text-[var(--color-ink)]"
             }`}
           >
             {t.type === "error" && <AlertCircle size={16} className="flex-shrink-0" />}

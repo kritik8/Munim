@@ -50,7 +50,7 @@ export function ActionFeed() {
           >
             <StatusIcon status={action.status} />
             <div className="min-w-0 flex-1">
-              <div className="font-medium text-sm text-[var(--color-ink)] dark:text-[var(--color-ink-dark)]">
+              <div className="font-medium text-sm text-[var(--color-ink)]">
                 {TOOL_LABELS[action.toolName] ?? action.toolName}
               </div>
               {typeof action.result?.message === "string" && (

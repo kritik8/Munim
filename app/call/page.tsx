@@ -556,7 +556,7 @@ export default function CallPage() {
                   }
                   className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all ${
                     activeTab === tab.id
-                      ? "bg-white dark:bg-[var(--color-surface-dark)] shadow-sm text-[var(--color-ink)] dark:text-[var(--color-ink-dark)]"
+                      ? "bg-white shadow-sm text-[var(--color-ink)]"
                       : "text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
                   }`}
                 >

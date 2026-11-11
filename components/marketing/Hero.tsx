@@ -124,7 +124,7 @@ function MockCallPreview() {
           <div
             className={`max-w-xs sm:max-w-sm px-3 py-2 rounded-2xl text-sm ${
               line.role === "munim"
-                ? "bg-[var(--color-surface)] dark:bg-[var(--color-surface-dark)] border border-[var(--color-hairline)] dark:border-[var(--color-hairline-dark)] text-[var(--color-ink)] dark:text-[var(--color-ink-dark)] border-l-2 border-l-[var(--color-accent)]"
+                ? "bg-[var(--color-surface)] border border-[var(--color-hairline)] text-[var(--color-ink)] border-l-2 border-l-[var(--color-accent)]"
                 : "bg-[var(--color-accent-soft)] text-[var(--color-ink)]"
             }`}
           >

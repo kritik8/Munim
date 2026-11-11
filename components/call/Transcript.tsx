@@ -32,7 +32,7 @@ export function Transcript() {
               className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
                 entry.role === "seller"
                   ? "bg-[var(--color-accent-soft)] text-[var(--color-ink)]"
-                  : `bg-[var(--color-surface)] dark:bg-[var(--color-surface-dark)] border border-[var(--color-hairline)] dark:border-[var(--color-hairline-dark)] border-l-2 border-l-[var(--color-accent)] text-[var(--color-ink)] dark:text-[var(--color-ink-dark)] ${
+                  : `bg-[var(--color-surface)] border border-[var(--color-hairline)] border-l-2 border-l-[var(--color-accent)] text-[var(--color-ink)] ${
                       entry.partial ? "opacity-70" : ""
                     }`
               }`}

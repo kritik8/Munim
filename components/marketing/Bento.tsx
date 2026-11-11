@@ -79,9 +79,9 @@ export function Bento() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.4, delay: i * 0.08 }}
-              className={`${tile.span} p-6 rounded-3xl border border-[var(--color-hairline)] dark:border-[var(--color-hairline-dark)] bg-[var(--color-surface)] dark:bg-[var(--color-surface-dark)] shadow-[var(--shadow-card)] ${
+              className={`${tile.span} p-6 rounded-3xl border border-[var(--color-hairline)] bg-[var(--color-surface)] shadow-[var(--shadow-card)] ${
                 tile.accent
-                  ? "bg-[var(--color-accent)] dark:bg-[var(--color-accent)] text-white border-transparent"
+                  ? "bg-[var(--color-accent)] text-white border-transparent"
                   : ""
               }`}
             >
@@ -101,7 +101,7 @@ export function Bento() {
               </div>
               <h3
                 className={`font-semibold mb-1 ${
-                  tile.accent ? "text-white" : ""
+                  tile.accent ? "text-white" : "text-slate-900"
                 }`}
               >
                 {tile.title}
@@ -110,7 +110,7 @@ export function Bento() {
                 className={`text-sm leading-relaxed ${
                   tile.accent
                     ? "text-white/80"
-                    : "text-[var(--color-ink-muted)]"
+                    : "text-slate-600"
                 }`}
               >
                 {tile.body}
@@ -155,20 +155,20 @@ export function Faq() {
     >
       <h2
         id="faq-heading"
-        className="text-3xl font-bold tracking-tight text-center mb-10"
+        className="text-3xl font-bold tracking-tight text-center mb-10 text-slate-900"
       >
         Questions
       </h2>
-      <div className="divide-y divide-[var(--color-hairline)] dark:divide-[var(--color-hairline-dark)]">
+      <div className="divide-y divide-[var(--color-hairline)]">
         {FAQ_ITEMS.map((item) => (
           <details key={item.q} className="group py-5">
-            <summary className="cursor-pointer list-none flex items-center justify-between gap-4 font-medium text-[var(--color-ink)] dark:text-[var(--color-ink-dark)]">
-              {item.q}
-              <span className="text-[var(--color-ink-faint)] group-open:rotate-45 transition-transform flex-shrink-0 text-xl leading-none">
+            <summary className="cursor-pointer list-none flex items-center justify-between gap-4 font-semibold text-slate-900 hover:text-[var(--color-accent)] transition-colors">
+              <span>{item.q}</span>
+              <span className="text-slate-400 group-open:rotate-45 transition-transform flex-shrink-0 text-xl leading-none">
                 +
               </span>
             </summary>
-            <p className="mt-3 text-sm text-[var(--color-ink-muted)] leading-relaxed">
+            <p className="mt-3 text-sm text-slate-600 leading-relaxed">
               {item.a}
             </p>
           </details>
@@ -180,7 +180,7 @@ export function Faq() {
 
 export function Footer() {
   return (
-    <footer className="border-t border-[var(--color-hairline)] dark:border-[var(--color-hairline-dark)] py-8 px-4 text-center">
+    <footer className="border-t border-[var(--color-hairline)] py-8 px-4 text-center">
       <p className="text-xs text-[var(--color-ink-faint)]">{PRODUCT_DISCLAIMER}</p>
       <p className="text-xs text-[var(--color-ink-faint)] mt-1">
         Made with care for the Snapdeal Seller Experience team assignment.

@@ -38,12 +38,12 @@
   --shadow-float: 0 4px 6px -1px rgba(15, 23, 42, 0.05), 0 20px 40px -12px rgba(2, 132, 199, 0.14);
   --shadow-orb: 0 8px 32px rgba(2, 132, 199, 0.35), inset 0 2px 4px rgba(255, 255, 255, 0.6);
 
-  /* ── Dark fallback (soft muted dark) ── */
-  --color-canvas-dark: #0B111A;
-  --color-surface-dark: #121A26;
-  --color-hairline-dark: #1E293B;
-  --color-ink-dark: #F1F5F9;
-  --color-ink-muted-dark: #94A3B8;
+  /* ── Dark fallback (locked to crisp light mode) ── */
+  --color-canvas-dark: #F8FAFC;
+  --color-surface-dark: #FFFFFF;
+  --color-hairline-dark: #E2E8F0;
+  --color-ink-dark: #0F172A;
+  --color-ink-muted-dark: #475569;
 
   /* ── Fonts ── */
   --font-sans: var(--font-geist-sans), system-ui, sans-serif;
