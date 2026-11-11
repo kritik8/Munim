@@ -157,7 +157,7 @@ export function Faq() {
         id="faq-heading"
         className="text-3xl font-bold tracking-tight text-center mb-10 text-slate-900"
       >
-        Questions
+        FAQs
       </h2>
       <div className="divide-y divide-[var(--color-hairline)]">
         {FAQ_ITEMS.map((item) => (
