@@ -30,6 +30,7 @@ const ChatBodySchema = z.object({
     "commit",
     "summarise",
   ]),
+  replyLanguage: z.enum(["en", "hi", "hinglish"]).optional(),
 });
 
 type ChatMessage = z.infer<typeof ChatBodySchema>["messages"][number];
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { messages, phase } = body;
+  const { messages, phase, replyLanguage } = body;
 
   if (!process.env.LITELLM_BASE_URL || !process.env.LITELLM_API_KEY) {
     return NextResponse.json(
@@ -70,7 +71,12 @@ export async function POST(req: NextRequest) {
   });
 
   const model = process.env.LITELLM_MODEL ?? "gpt-4o-mini";
-  const systemPrompt = buildSystemPrompt(phase, SELLER, diagnose());
+  const systemPrompt = buildSystemPrompt(
+    phase,
+    SELLER,
+    diagnose(),
+    replyLanguage ?? "hinglish"
+  );
 
   const allMessages: ChatMessage[] = [
     { role: "system", content: systemPrompt },

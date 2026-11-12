@@ -43,8 +43,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const voice = process.env.GNANI_TTS_VOICE ?? "Nalini";
+  const envVoice = process.env.GNANI_TTS_VOICE ?? "Nalini";
   const langCode = getTtsLanguage(lang);
+  // Nalini is Hindi-oriented on timbre-v2.5; switch to Kaveri when speaking en-IN English
+  const voice =
+    langCode === "en-IN" && envVoice.toLowerCase() === "nalini"
+      ? "Kaveri"
+      : envVoice;
 
   const ttsBody = buildTtsBody({ text, voice, language: langCode });
 

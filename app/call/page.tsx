@@ -9,6 +9,7 @@ import { VAD } from "@/lib/voice/vad";
 import { AudioPlayer } from "@/lib/voice/player";
 import { voiceCoordinator } from "@/lib/voice/coordinator";
 import { toSpoken } from "@/lib/voice/toSpoken";
+import { detectTextLanguage, type DetectedVoiceLanguage } from "@/lib/voice/language";
 import type { ConversationPhase } from "@/lib/agent/prompt";
 import { CallShelf } from "@/components/call/CallShelf";
 import { Orb } from "@/components/call/Orb";
@@ -93,7 +94,10 @@ export default function CallPage() {
 
   // ── Send text to LLM and stream response ──────────────────────────────────
   const sendToLLM = useCallback(
-    async (userText: string, options?: { hideUserMessage?: boolean }) => {
+    async (
+      userText: string,
+      options?: { hideUserMessage?: boolean; detectedLang?: DetectedVoiceLanguage }
+    ) => {
       // Interrupt any lingering playback cleanly before replying
       clearVadResumeTimer();
       playerRef.current?.abort();
@@ -109,6 +113,15 @@ export default function CallPage() {
 
       // Snapshot current transcript & phase directly from store (avoids stale closures)
       const latestState = useMunimStore.getState();
+      const effectiveReplyLang: "en" | "hi" | "hinglish" =
+        latestState.language === "en"
+          ? "en"
+          : options?.hideUserMessage
+          ? latestState.language === "hi"
+            ? "hi"
+            : "en"
+          : options?.detectedLang ?? detectTextLanguage(userText);
+
       const historyMessages = latestState.transcript
         .filter((e) => !e.partial)
         .map((e) => ({
@@ -151,6 +164,7 @@ export default function CallPage() {
               { role: "user", content: userText },
             ],
             phase: latestState.phase,
+            replyLanguage: effectiveReplyLang,
           }),
           signal: chatAbortRef.current.signal,
         });
@@ -206,11 +220,16 @@ export default function CallPage() {
               }
 
               case "sentence": {
-                const spoken = toSpoken(evt.text as string);
+                const rawSentence = evt.text as string;
+                const spoken = toSpoken(rawSentence);
                 if (spoken.trim().length > 0) {
                   enqueuedAnySpeech = true;
                   store.setCallState("speaking");
-                  playerRef.current?.enqueue(spoken, ttsLangRef.current);
+                  const sentenceLang =
+                    effectiveReplyLang === "en"
+                      ? "en"
+                      : detectTextLanguage(rawSentence);
+                  playerRef.current?.enqueue(spoken, sentenceLang);
                 }
                 break;
               }
@@ -312,7 +331,9 @@ export default function CallPage() {
 
   // ── REST STT via Gnani with global lock & failure threshold ───────────────
   const transcribeBlob = useCallback(
-    async (blob: Blob): Promise<string | null> => {
+    async (
+      blob: Blob
+    ): Promise<{ text: string; detectedLang: DetectedVoiceLanguage } | null> => {
       if (usesBrowserFallback || isTranscribingRef.current) return null;
 
       isTranscribingRef.current = true;
@@ -338,10 +359,18 @@ export default function CallPage() {
           return null;
         }
 
-        const json = await res.json();
+        const json = (await res.json()) as {
+          text?: string;
+          detectedLang?: DetectedVoiceLanguage;
+        };
         consecutiveErrorsRef.current = 0; // reset on success
         setLatency((l) => ({ ...l, stt: Date.now() - sttStart }));
-        return (json.text as string) || null;
+        const text = (json.text ?? "").trim();
+        if (!text) return null;
+        return {
+          text,
+          detectedLang: json.detectedLang ?? detectTextLanguage(text),
+        };
       } catch (err) {
         console.error("[STT] network error:", err);
         consecutiveErrorsRef.current++;
@@ -434,9 +463,9 @@ export default function CallPage() {
           }
 
           store.setCallState("thinking");
-          const text = await transcribeBlob(blob);
-          if (text && text.trim().length > 0) {
-            await sendToLLM(text.trim());
+          const result = await transcribeBlob(blob);
+          if (result && result.text.length > 0) {
+            await sendToLLM(result.text, { detectedLang: result.detectedLang });
           } else {
             const afterState = useMunimStore.getState().callState;
             if (afterState !== "speaking" && afterState !== "ended" && afterState !== "idle") {
@@ -454,7 +483,7 @@ export default function CallPage() {
     // Proactive greeting turn (hidden internal trigger so transcript stays clean)
     store.setCallState("thinking");
     await sendToLLM(
-      "(call started — please greet me warmly in Hinglish as Munim, Snapdeal's Virtual Key Account Manager, and invite me to share my store name and what problem I am facing today)",
+      "(call started — please greet me warmly in clear English as Munim, Snapdeal's Virtual Key Account Manager, and invite me to share my store name and what problem I am facing today)",
       { hideUserMessage: true }
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -473,7 +502,7 @@ export default function CallPage() {
     const sr = new SR();
     sr.continuous = false;
     sr.interimResults = true;
-    sr.lang = language === "hi" ? "hi-IN" : language === "en" ? "en-IN" : "hi-IN";
+    sr.lang = language === "hi" ? "hi-IN" : "en-IN";
 
     let partialId = "";
 

@@ -12,28 +12,35 @@ export const GNANI_STT_URL = `${GNANI_BASE}/stt/v3`;
 export const GNANI_TTS_SSE_URL = `${GNANI_BASE}/api/v1/tts/sse`;
 
 export interface GnaniLangConfig {
+  model: string;
   language_code: string;
   multi_lang_codes?: string;
+  format: string;
   tts_lang: string;
 }
 
 /**
- * Supported language configurations for Gnani Prisma STT and Timbre TTS.
- * Prisma supported codes: as-IN, bn-IN, en-IN, gu-IN, hi-IN, indic-auto, kn-IN, ml-IN, mr-IN, pa-IN, ta-IN, te-IN.
- * Note: language_code=indic-auto requires multi_lang_codes="hi-IN,en-IN".
+ * Supported language configurations for Gnani Prisma v3.0 STT and Timbre TTS.
+ * Prisma v3.0 with language_code="indic-auto" and format="transliterate" recognizes
+ * English, Hindi, and code-mixed speech and returns Latin-script text + detected_language_code.
  */
 export const GNANI_LANG_CONFIG: Record<string, GnaniLangConfig> = {
   en: {
-    language_code: "en-IN",
+    model: "prisma-v3.0",
+    language_code: "indic-auto",
+    format: "transliterate",
     tts_lang: "en-IN",
   },
   hi: {
-    language_code: "hi-IN",
+    model: "prisma-v3.0",
+    language_code: "indic-auto",
+    format: "transliterate",
     tts_lang: "hi-IN",
   },
   hinglish: {
+    model: "prisma-v3.0",
     language_code: "indic-auto",
-    multi_lang_codes: "hi-IN,en-IN",
+    format: "transliterate",
     tts_lang: "hi-IN",
   },
 };
@@ -54,12 +61,12 @@ export function buildSttFormData(
   const cfg = GNANI_LANG_CONFIG[lang] ?? GNANI_LANG_CONFIG.hinglish;
 
   form.append("audio_file", audioBlob, filename);
-  form.append("model", "prisma-v2.5");
+  form.append("model", cfg.model);
   form.append("language_code", cfg.language_code);
   if (cfg.multi_lang_codes) {
     form.append("multi_lang_codes", cfg.multi_lang_codes);
   }
-  form.append("format", "transcribe");
+  form.append("format", cfg.format);
   return form;
 }
 
