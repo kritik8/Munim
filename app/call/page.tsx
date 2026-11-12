@@ -16,6 +16,7 @@ import { ActionFeed } from "@/components/actions/ActionFeed";
 import { SellerPanel } from "@/components/insights/SellerPanel";
 import { SummaryCard } from "@/components/summary/SummaryCard";
 import { ShortcutHint } from "@/components/call/ShortcutHint";
+import { GuidePanel } from "@/components/call/GuidePanel";
 import { toast } from "@/lib/hooks/useToast";
 import type { TranscriptEntry, ActionEntry } from "@/lib/store";
 
@@ -83,22 +84,34 @@ export default function CallPage() {
 
   // ── Send text to LLM and stream response ──────────────────────────────────
   const sendToLLM = useCallback(
-    async (userText: string) => {
-      // Pause VAD while Munim is thinking or replying
+    async (userText: string, options?: { hideUserMessage?: boolean }) => {
+      // Interrupt any lingering playback cleanly before replying
+      playerRef.current?.abort();
       vadRef.current?.pause();
       store.setCallState("thinking");
       chatAbortRef.current?.abort();
       chatAbortRef.current = new AbortController();
 
-      // Add user message to transcript
-      const userId = crypto.randomUUID();
-      store.addTranscriptEntry({
-        id: userId,
-        role: "seller",
-        text: userText,
-        partial: false,
-        ts: Date.now(),
-      });
+      // Snapshot current transcript & phase directly from store (avoids stale closures)
+      const latestState = useMunimStore.getState();
+      const historyMessages = latestState.transcript
+        .filter((e) => !e.partial)
+        .map((e) => ({
+          role: e.role === "seller" ? ("user" as const) : ("assistant" as const),
+          content: e.text,
+        }));
+
+      // Add user message to transcript unless hidden (initial greeting prompt)
+      if (!options?.hideUserMessage) {
+        const userId = crypto.randomUUID();
+        store.addTranscriptEntry({
+          id: userId,
+          role: "seller",
+          text: userText,
+          partial: false,
+          ts: Date.now(),
+        });
+      }
 
       // Add partial Munim response entry
       const munimId = crypto.randomUUID();
@@ -119,13 +132,10 @@ export default function CallPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             messages: [
-              ...transcript.filter((e) => !e.partial).map((e) => ({
-                role: e.role === "seller" ? "user" : "assistant",
-                content: e.text,
-              })),
+              ...historyMessages,
               { role: "user", content: userText },
             ],
-            phase,
+            phase: latestState.phase,
           }),
           signal: chatAbortRef.current.signal,
         });
@@ -134,12 +144,12 @@ export default function CallPage() {
           throw new Error("Chat API error");
         }
 
-        store.setCallState("speaking");
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
         let munimText = "";
         let firstToken = false;
+        let enqueuedAnySpeech = false;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -182,8 +192,11 @@ export default function CallPage() {
 
               case "sentence": {
                 const spoken = toSpoken(evt.text as string);
-                // Enqueue for serial TTS (sentence N+1 synthesizes only after sentence N finishes)
-                playerRef.current?.enqueue(spoken, ttsLangRef.current);
+                if (spoken.trim().length > 0) {
+                  enqueuedAnySpeech = true;
+                  store.setCallState("speaking");
+                  playerRef.current?.enqueue(spoken, ttsLangRef.current);
+                }
                 break;
               }
 
@@ -198,12 +211,12 @@ export default function CallPage() {
                   status: "running",
                   ts: Date.now(),
                 });
-                (evt as Record<string, unknown>)._actionId = actionId;
                 break;
               }
 
               case "tool_result": {
-                const matchingAction = actions
+                const currentActions = useMunimStore.getState().actions;
+                const matchingAction = currentActions
                   .slice()
                   .reverse()
                   .find((a) => a.toolName === evt.name && a.status === "running");
@@ -252,6 +265,14 @@ export default function CallPage() {
         }
 
         store.finalisePartial(munimId, munimText);
+
+        // Safety fallback: if no audio was queued or playback already finished, resume listening
+        if (!enqueuedAnySpeech || !playerRef.current?.isPlaying) {
+          if (useMunimStore.getState().callState !== "ended") {
+            vadRef.current?.resume();
+            store.setCallState("listening");
+          }
+        }
       } catch (err) {
         if ((err as Error)?.name === "AbortError") return;
         console.error("[chat]", err);
@@ -261,8 +282,18 @@ export default function CallPage() {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [phase, transcript, actions]
+    []
   );
+
+  const activateBrowserFallback = useCallback(() => {
+    if (usesBrowserFallback) return;
+    setUsesBrowserFallback(true);
+    store.setVoiceProvider("browser");
+    if (!hasShownFallbackToastRef.current) {
+      hasShownFallbackToastRef.current = true;
+      toast.info("Switched to browser speech (Gnani unavailable).");
+    }
+  }, [usesBrowserFallback, store]);
 
   // ── REST STT via Gnani with global lock & failure threshold ───────────────
   const transcribeBlob = useCallback(
@@ -277,8 +308,8 @@ export default function CallPage() {
 
       try {
         const form = new FormData();
-        form.append("audio", blob, "audio.webm");
-        form.append("lang", language);
+        form.append("audio", blob, "audio.wav");
+        form.append("lang", useMunimStore.getState().language);
 
         const res = await fetch("/api/stt", { method: "POST", body: form });
 
@@ -308,18 +339,8 @@ export default function CallPage() {
         isTranscribingRef.current = false;
       }
     },
-    [language, usesBrowserFallback]
+    [usesBrowserFallback, activateBrowserFallback]
   );
-
-  const activateBrowserFallback = useCallback(() => {
-    if (usesBrowserFallback) return;
-    setUsesBrowserFallback(true);
-    store.setVoiceProvider("browser");
-    if (!hasShownFallbackToastRef.current) {
-      hasShownFallbackToastRef.current = true;
-      toast.info("Switched to browser speech (Gnani unavailable).");
-    }
-  }, [usesBrowserFallback, store]);
 
   // ── Start the call ─────────────────────────────────────────────────────────
   const startCall = useCallback(async () => {
@@ -334,20 +355,24 @@ export default function CallPage() {
       onEnd: () => {
         // Resume VAD only when speech playback completes
         vadRef.current?.resume();
-        if (store.callState !== "ended") {
+        if (useMunimStore.getState().callState !== "ended") {
           store.setCallState("listening");
         }
       },
       onTTSFirstByte: (latencyMs) => {
         setLatency((l) => ({ ...l, tts: latencyMs }));
       },
+      onProviderFallback: () => {
+        store.setVoiceProvider("browser");
+      },
     });
+    await playerRef.current.warmup();
 
-    // Start VAD with adaptive noise calibration and speech thresholds
+    // Start VAD with adaptive noise calibration and 16kHz WAV capture
     try {
       vadRef.current = new VAD({
-        silenceMs: 700,
-        minSpeechDurationMs: 400,
+        silenceMs: 800,
+        minSpeechDurationMs: 350,
         onLevelChange: setMicLevel,
         onSpeechStart: () => {
           if (playerRef.current?.isPlaying) {
@@ -366,7 +391,7 @@ export default function CallPage() {
           if (text && text.trim().length > 0) {
             await sendToLLM(text.trim());
           } else {
-            if (store.callState !== "speaking") {
+            if (useMunimStore.getState().callState !== "speaking") {
               vadRef.current?.resume();
               store.setCallState("listening");
             }
@@ -378,9 +403,12 @@ export default function CallPage() {
       activateBrowserFallback();
     }
 
-    // Proactive greeting turn
+    // Proactive greeting turn (hidden internal trigger so transcript stays clean)
     store.setCallState("thinking");
-    await sendToLLM("(call started — please greet me proactively with the seller data)");
+    await sendToLLM(
+      "(call started — please greet me warmly in Hinglish as Munim, Snapdeal's Virtual Key Account Manager, and invite me to share my store name and what problem I am facing today)",
+      { hideUserMessage: true }
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -476,7 +504,8 @@ export default function CallPage() {
       vadRef.current?.resume();
       store.setCallState("listening");
     } else if (callState === "listening") {
-      // Manual push-to-talk stop (do nothing, VAD handles end)
+      // Allow tapping Orb / Space while speaking to immediately send utterance
+      vadRef.current?.forceStopSpeech();
     } else if (callState === "thinking") {
       // Cancel LLM
       chatAbortRef.current?.abort();
@@ -496,7 +525,9 @@ export default function CallPage() {
   }, [store]);
 
   const handleMuteToggle = useCallback(() => {
-    store.setMuted(!store.muted);
+    const nextMuted = !store.muted;
+    store.setMuted(nextMuted);
+    vadRef.current?.setMuted(nextMuted);
   }, [store]);
 
   // ── Tab counts ────────────────────────────────────────────────────────────
@@ -509,22 +540,22 @@ export default function CallPage() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[var(--color-canvas)] dark:bg-[var(--color-canvas-dark)]">
+    <div className="min-h-screen bg-[var(--color-canvas)]">
       <CallShelf
         onEnd={endCall}
         onMuteToggle={handleMuteToggle}
         onInterrupt={handleOrbPress}
       />
 
-      <main className="max-w-6xl mx-auto px-4 pt-20 pb-8">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 items-start">
+      <main className="max-w-7xl mx-auto px-4 pt-20 pb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-6 items-start">
           {/* ── Left: Orb + Transcript/Actions ── */}
           <div className="flex flex-col gap-6">
             {/* Orb area */}
             <div className="flex flex-col items-center py-8 gap-4">
               <Orb onPress={handleOrbPress} level={micLevel} />
               <div className="text-sm text-[var(--color-ink-muted)]">
-                {callState === "listening" && "Listening…"}
+                {callState === "listening" && (store.muted ? "Muted" : "Listening… (speak or tap Orb to send)")}
                 {callState === "thinking" && "Munim is thinking…"}
                 {callState === "speaking" && "Munim is speaking…"}
                 {callState === "connecting" && "Connecting…"}
@@ -583,7 +614,7 @@ export default function CallPage() {
                     <ActionFeed />
                   </section>
                 )}
-              {activeTab === "all" && summary && (
+              {activeTab === "all" && summary && callState !== "ended" && (
                 <div className="mt-4">
                   <SummaryCard />
                 </div>
@@ -591,18 +622,26 @@ export default function CallPage() {
             </div>
           </div>
 
-          {/* ── Right: Seller insights ── */}
-          <aside>
-            <div className="sticky top-20">
+          {/* ── Right: Helping Column (Conversation Guide + Seller Insights) ── */}
+          <aside aria-label="Helping guide and seller insights">
+            <div className="sticky top-20 space-y-5">
+              <GuidePanel
+                onSendExample={(text) => sendToLLM(text)}
+                disabled={
+                  callState === "thinking" ||
+                  callState === "connecting" ||
+                  callState === "ended"
+                }
+              />
               {(activeTab === "all" || activeTab === "insights") && (
-                <SellerPanel />
-              )}
-              {activeTab === "actions" && <ActionFeed />}
-              {summary && activeTab === "all" && (
-                <div className="mt-4">
-                  <SummaryCard />
+                <div className="p-5 rounded-3xl border border-white/10 bg-[#13141B]/60">
+                  <div className="text-[11px] font-mono uppercase tracking-wider text-slate-400 mb-3">
+                    Sample Seller Snapshot
+                  </div>
+                  <SellerPanel />
                 </div>
               )}
+              {activeTab === "actions" && <ActionFeed />}
             </div>
           </aside>
         </div>

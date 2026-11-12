@@ -1,50 +1,126 @@
 "use client";
 /**
  * lib/voice/vad.ts
- * Robust Client-side Voice Activity Detection (VAD) with noise calibration.
+ * Client-side Voice Activity Detection (VAD) that outputs 16kHz 16-bit mono WAV.
  *
- * Improvements:
- * - 1-second background noise calibration at start to set an adaptive RMS threshold (min 0.035).
- * - Minimum speech duration check (~400 ms) to ignore clicks, breath, and taps.
- * - Minimum audio blob size threshold (~3500 bytes / ~0.5s duration) to discard tiny fragments.
- * - End-of-speech silence window: ~700 ms.
- * - pause() and resume() support to freeze VAD while the agent is speaking.
- * - Level meter callback for UI animation.
+ * Why WAV instead of MediaRecorder webm?
+ * Gnani REST STT accepts: ogg, aac, flac, mp3, m4a, wav (NOT webm).
+ * Recording raw PCM via Web Audio API and encoding a standard RIFF WAV ensures
+ * universal browser compatibility and zero 400 UNSUPPORTED_AUDIO_FORMAT errors.
  */
 
 export interface VADOptions {
-  silenceMs?: number; // default 700 ms
-  minSpeechDurationMs?: number; // default 400 ms
+  silenceMs?: number; // default 800 ms
+  minSpeechDurationMs?: number; // default 350 ms
+  maxSpeechDurationMs?: number; // default 18000 ms
   onLevelChange?: (level: number) => void;
   onSpeechStart?: () => void;
   onSpeechEnd?: (blob: Blob, durationMs: number) => void;
+}
+
+const TARGET_SAMPLE_RATE = 16000;
+
+/** Downsample Float32 PCM buffer from inputSampleRate to targetSampleRate */
+function downsampleBuffer(
+  buffer: Float32Array,
+  inputSampleRate: number,
+  targetSampleRate: number
+): Float32Array {
+  if (inputSampleRate === targetSampleRate) return buffer;
+  const ratio = inputSampleRate / targetSampleRate;
+  const newLength = Math.round(buffer.length / ratio);
+  const result = new Float32Array(newLength);
+  let offsetResult = 0;
+  let offsetBuffer = 0;
+
+  while (offsetResult < result.length) {
+    const nextOffsetBuffer = Math.round((offsetResult + 1) * ratio);
+    let accum = 0;
+    let count = 0;
+    for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
+      accum += buffer[i];
+      count++;
+    }
+    result[offsetResult] = count > 0 ? accum / count : 0;
+    offsetResult++;
+    offsetBuffer = nextOffsetBuffer;
+  }
+  return result;
+}
+
+/** Encode Float32Array PCM samples as a 16-bit mono RIFF WAV Blob */
+function encodeWav(samples: Float32Array, sampleRate: number): Blob {
+  const dataLength = samples.length * 2;
+  const buffer = new ArrayBuffer(44 + dataLength);
+  const view = new DataView(buffer);
+
+  const writeString = (offset: number, str: string) => {
+    for (let i = 0; i < str.length; i++) {
+      view.setUint8(offset + i, str.charCodeAt(i));
+    }
+  };
+
+  writeString(0, "RIFF");
+  view.setUint32(4, 36 + dataLength, true);
+  writeString(8, "WAVE");
+  writeString(12, "fmt ");
+  view.setUint32(16, 16, true); // PCM chunk size
+  view.setUint16(20, 1, true); // PCM format = 1
+  view.setUint16(22, 1, true); // Mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true); // Byte rate
+  view.setUint16(32, 2, true); // Block align
+  view.setUint16(34, 16, true); // 16-bit
+  writeString(36, "data");
+  view.setUint32(40, dataLength, true);
+
+  let offset = 44;
+  for (let i = 0; i < samples.length; i++) {
+    const clamped = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(
+      offset,
+      clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff,
+      true
+    );
+    offset += 2;
+  }
+
+  return new Blob([buffer], { type: "audio/wav" });
 }
 
 export class VAD {
   private ctx: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
   private source: MediaStreamAudioSourceNode | null = null;
-  private mediaRecorder: MediaRecorder | null = null;
-  private chunks: Blob[] = [];
+  private processor: ScriptProcessorNode | null = null;
+  private silentGain: GainNode | null = null;
   private stream: MediaStream | null = null;
 
   private opts: Required<VADOptions>;
   private animFrame: number | null = null;
   private silenceTimer: ReturnType<typeof setTimeout> | null = null;
+  private maxDurationTimer: ReturnType<typeof setTimeout> | null = null;
   private speaking = false;
   private active = false;
   private paused = false;
+  private muted = false;
+
+  // PCM recording buffers
+  private preRollBuffers: Float32Array[] = [];
+  private readonly maxPreRollChunks = 3; // ~300-700ms pre-roll
+  private recordedFrames: Float32Array[] = [];
 
   // Calibration state
   private isCalibrating = true;
   private calibrationSamples: number[] = [];
-  private threshold = 0.035; // baseline minimum threshold
+  private threshold = 0.018;
   private speechStartTime = 0;
 
   constructor(opts: VADOptions = {}) {
     this.opts = {
-      silenceMs: opts.silenceMs ?? 700,
-      minSpeechDurationMs: opts.minSpeechDurationMs ?? 400,
+      silenceMs: opts.silenceMs ?? 800,
+      minSpeechDurationMs: opts.minSpeechDurationMs ?? 350,
+      maxSpeechDurationMs: opts.maxSpeechDurationMs ?? 18000,
       onLevelChange: opts.onLevelChange ?? (() => {}),
       onSpeechStart: opts.onSpeechStart ?? (() => {}),
       onSpeechEnd: opts.onSpeechEnd ?? (() => {}),
@@ -57,37 +133,78 @@ export class VAD {
         echoCancellation: true,
         noiseSuppression: true,
         autoGainControl: true,
-        sampleRate: 16000,
       },
     });
 
-    this.ctx = new AudioContext({ sampleRate: 16000 });
+    try {
+      this.ctx = new AudioContext({ sampleRate: TARGET_SAMPLE_RATE });
+    } catch {
+      this.ctx = new AudioContext();
+    }
+
+    if (this.ctx.state === "suspended") {
+      await this.ctx.resume();
+    }
+
     this.analyser = this.ctx.createAnalyser();
     this.analyser.fftSize = 512;
     this.analyser.smoothingTimeConstant = 0.2;
+
     this.source = this.ctx.createMediaStreamSource(this.stream);
     this.source.connect(this.analyser);
+
+    // ScriptProcessor captures raw PCM cleanly across all browsers
+    this.processor = this.ctx.createScriptProcessor(4096, 1, 1);
+    this.silentGain = this.ctx.createGain();
+    this.silentGain.gain.value = 0;
+
+    this.processor.onaudioprocess = (e) => {
+      if (!this.active || this.paused || this.muted) return;
+      const input = e.inputBuffer.getChannelData(0);
+      const copy = new Float32Array(input.length);
+      copy.set(input);
+
+      if (this.speaking) {
+        this.recordedFrames.push(copy);
+      } else {
+        this.preRollBuffers.push(copy);
+        if (this.preRollBuffers.length > this.maxPreRollChunks) {
+          this.preRollBuffers.shift();
+        }
+      }
+    };
+
+    this.source.connect(this.processor);
+    this.processor.connect(this.silentGain);
+    this.silentGain.connect(this.ctx.destination);
 
     this.active = true;
     this.isCalibrating = true;
     this.calibrationSamples = [];
 
-    // Calibrate background noise for 1 second
+    // Calibrate background noise for 900ms
     setTimeout(() => {
       if (this.calibrationSamples.length > 0) {
         const avg =
           this.calibrationSamples.reduce((a, b) => a + b, 0) /
           this.calibrationSamples.length;
-        // Adaptive threshold: 2.5x ambient noise, clamped between 0.035 and 0.12
-        this.threshold = Math.max(0.035, Math.min(0.12, avg * 2.5));
+        // Adaptive threshold: gentle floor 0.015, cap 0.08 so quiet laptop mics work well
+        this.threshold = Math.max(0.015, Math.min(0.08, avg * 2.4 + 0.005));
         console.log(
-          `[VAD] Calibrated: ambient=${avg.toFixed(4)}, threshold=${this.threshold.toFixed(4)}`
+          `[VAD] Calibrated: ambient=${avg.toFixed(4)}, threshold=${this.threshold.toFixed(4)}, sampleRate=${this.ctx?.sampleRate}`
         );
       }
       this.isCalibrating = false;
-    }, 1000);
+    }, 900);
 
     this.loop();
+  }
+
+  setMuted(muted: boolean): void {
+    this.muted = muted;
+    if (muted && this.speaking) {
+      this.cancelSpeech();
+    }
   }
 
   pause(): void {
@@ -95,28 +212,56 @@ export class VAD {
     if (this.speaking) {
       this.cancelSpeech();
     }
+    this.opts.onLevelChange(0);
   }
 
   resume(): void {
     this.paused = false;
     this.speaking = false;
-    if (this.silenceTimer !== null) {
-      clearTimeout(this.silenceTimer);
-      this.silenceTimer = null;
+    this.preRollBuffers = [];
+    this.clearTimers();
+    if (this.ctx?.state === "suspended") {
+      this.ctx.resume().catch(() => {});
+    }
+  }
+
+  /** Force-finalize the current spoken utterance immediately (e.g. user tapped Orb) */
+  forceStopSpeech(): void {
+    if (this.speaking) {
+      this.onSpeakEnd();
     }
   }
 
   stop(): void {
     this.active = false;
     if (this.animFrame !== null) cancelAnimationFrame(this.animFrame);
-    if (this.silenceTimer !== null) clearTimeout(this.silenceTimer);
     this.cancelSpeech();
+
+    try {
+      this.processor?.disconnect();
+      this.silentGain?.disconnect();
+      this.source?.disconnect();
+    } catch {}
+
     this.stream?.getTracks().forEach((t) => t.stop());
-    this.ctx?.close();
+    this.ctx?.close().catch(() => {});
     this.ctx = null;
     this.analyser = null;
     this.source = null;
+    this.processor = null;
+    this.silentGain = null;
     this.stream = null;
+  }
+
+  private clearTimers(): void {
+    if (this.silenceTimer !== null) {
+      clearTimeout(this.silenceTimer);
+      this.silenceTimer = null;
+    }
+    if (this.maxDurationTimer !== null) {
+      clearTimeout(this.maxDurationTimer);
+      this.maxDurationTimer = null;
+    }
   }
 
   private loop(): void {
@@ -131,18 +276,16 @@ export class VAD {
     }
     const rms = Math.sqrt(sum / data.length);
 
-    // Feed calibration
     if (this.isCalibrating) {
       this.calibrationSamples.push(rms);
     }
 
-    // Live level visualizer (0 to 1)
-    const level = Math.min(1, Math.max(0, (rms - 0.01) / 0.08));
-    this.opts.onLevelChange(this.paused ? 0 : level);
+    const level = Math.min(1, Math.max(0, (rms - 0.005) / 0.06));
+    this.opts.onLevelChange(this.paused || this.muted ? 0 : level);
 
-    // Skip speech detection if paused or calibrating
-    if (!this.paused && !this.isCalibrating) {
-      if (rms > this.threshold) {
+    if (!this.paused && !this.muted && !this.isCalibrating) {
+      const holdThreshold = this.speaking ? this.threshold * 0.72 : this.threshold;
+      if (rms > holdThreshold) {
         if (!this.speaking) {
           this.onSpeakStart();
         }
@@ -165,67 +308,57 @@ export class VAD {
   private onSpeakStart(): void {
     this.speaking = true;
     this.speechStartTime = Date.now();
-    this.chunks = [];
-    if (!this.stream) return;
+    // Seed with pre-roll so initial syllable is never clipped
+    this.recordedFrames = [...this.preRollBuffers];
+    this.preRollBuffers = [];
 
-    const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-      ? "audio/webm;codecs=opus"
-      : "audio/webm";
+    this.maxDurationTimer = setTimeout(() => {
+      if (this.speaking) {
+        this.onSpeakEnd();
+      }
+    }, this.opts.maxSpeechDurationMs);
 
-    try {
-      this.mediaRecorder = new MediaRecorder(this.stream, { mimeType });
-      this.mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) this.chunks.push(e.data);
-      };
-      this.mediaRecorder.start(100);
-      this.opts.onSpeechStart();
-    } catch (e) {
-      console.error("[VAD] Failed to start MediaRecorder:", e);
-    }
+    this.opts.onSpeechStart();
   }
 
   private onSpeakEnd(): void {
     const duration = Date.now() - this.speechStartTime;
     this.speaking = false;
-    this.silenceTimer = null;
+    this.clearTimers();
 
-    if (!this.mediaRecorder || this.mediaRecorder.state === "inactive") return;
+    const frames = this.recordedFrames;
+    this.recordedFrames = [];
 
-    this.mediaRecorder.onstop = () => {
-      const blob = new Blob(this.chunks, {
-        type: this.mediaRecorder?.mimeType ?? "audio/webm",
-      });
-      this.chunks = [];
+    if (duration < this.opts.minSpeechDurationMs || frames.length === 0) {
+      console.log(`[VAD] Discarded short audio: duration=${duration}ms`);
+      return;
+    }
 
-      // Discard clips shorter than minSpeechDurationMs or tiny size (under 3000 bytes)
-      if (duration >= this.opts.minSpeechDurationMs && blob.size >= 3000) {
-        this.opts.onSpeechEnd(blob, duration);
-      } else {
-        console.log(
-          `[VAD] Discarded short audio: duration=${duration}ms, size=${blob.size}B`
-        );
-      }
-    };
+    // Concatenate Float32 PCM chunks
+    const totalLength = frames.reduce((acc, f) => acc + f.length, 0);
+    const merged = new Float32Array(totalLength);
+    let offset = 0;
+    for (const f of frames) {
+      merged.set(f, offset);
+      offset += f.length;
+    }
 
-    try {
-      this.mediaRecorder.stop();
-    } catch {}
-    this.mediaRecorder = null;
+    const actualRate = this.ctx?.sampleRate ?? TARGET_SAMPLE_RATE;
+    const pcm16k = downsampleBuffer(merged, actualRate, TARGET_SAMPLE_RATE);
+    const wavBlob = encodeWav(pcm16k, TARGET_SAMPLE_RATE);
+
+    if (wavBlob.size < 4000) {
+      console.log(`[VAD] Discarded tiny WAV: size=${wavBlob.size}B`);
+      return;
+    }
+
+    this.opts.onSpeechEnd(wavBlob, duration);
   }
 
   private cancelSpeech(): void {
     this.speaking = false;
-    if (this.silenceTimer !== null) {
-      clearTimeout(this.silenceTimer);
-      this.silenceTimer = null;
-    }
-    if (this.mediaRecorder && this.mediaRecorder.state !== "inactive") {
-      try {
-        this.mediaRecorder.onstop = null;
-        this.mediaRecorder.stop();
-      } catch {}
-    }
-    this.mediaRecorder = null;
-    this.chunks = [];
+    this.clearTimers();
+    this.recordedFrames = [];
+    this.preRollBuffers = [];
   }
 }

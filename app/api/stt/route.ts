@@ -66,9 +66,13 @@ export async function POST(req: NextRequest) {
   const gnaniForm = new FormData();
   const blob = await audioFile
     .arrayBuffer()
-    .then((ab) => new Blob([ab], { type: audioFile.type }));
+    .then((ab) => new Blob([ab], { type: audioFile.type || "audio/wav" }));
 
-  gnaniForm.append("audio_file", blob, audioFile.name || "audio.webm");
+  const filename = audioFile.name && !audioFile.name.endsWith(".webm")
+    ? audioFile.name
+    : "audio.wav";
+
+  gnaniForm.append("audio_file", blob, filename);
   gnaniForm.append("model", "prisma-v2.5");
   gnaniForm.append("language_code", langConfig.language_code);
   if (langConfig.multi_lang_codes) {

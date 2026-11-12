@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
 
       let currentPhase: ConversationPhase = phase;
       let iterCount = 0;
-      const MAX_ITERS = 2; // prevent multi-turn runaway latency
+      const MAX_ITERS = 3; // tool loop + spoken confirmation
       let ttftLogged = false;
 
       try {
@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
             tools: TOOL_DEFINITIONS as unknown as OpenAI.ChatCompletionTool[],
             tool_choice: "auto",
             stream: true,
-            max_tokens: 120, // keep max_tokens small (~120) for voice latency
+            max_tokens: 160,
           });
 
           let fullText = "";
@@ -185,6 +185,14 @@ export async function POST(req: NextRequest) {
               if (tc.name === "end_call_with_summary") {
                 currentPhase = "summarise";
                 send("phase", { phase: currentPhase });
+              } else if (
+                ["create_restock_alert", "flag_cancellations", "draft_promo", "schedule_followup"].includes(tc.name)
+              ) {
+                currentPhase = "commit";
+                send("phase", { phase: currentPhase });
+              } else if (["diagnose_decline", "list_oos_skus"].includes(tc.name)) {
+                currentPhase = "diagnose";
+                send("phase", { phase: currentPhase });
               }
 
               allMessages.push({
@@ -197,9 +205,20 @@ export async function POST(req: NextRequest) {
             continue;
           }
 
-          if (currentPhase === "greet" && fullText.length > 10) {
-            currentPhase = "discover";
-            send("phase", { phase: currentPhase });
+          if (fullText.length > 10) {
+            if (currentPhase === "greet") {
+              currentPhase = "discover";
+              send("phase", { phase: currentPhase });
+            } else if (currentPhase === "discover" && messages.length >= 3) {
+              currentPhase = "diagnose";
+              send("phase", { phase: currentPhase });
+            } else if (currentPhase === "diagnose") {
+              currentPhase = "recommend";
+              send("phase", { phase: currentPhase });
+            } else if (currentPhase === "recommend") {
+              currentPhase = "commit";
+              send("phase", { phase: currentPhase });
+            }
           }
 
           break;
