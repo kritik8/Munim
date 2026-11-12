@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { useEffect, useRef, useCallback, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
+import { Phone } from "lucide-react";
 import { useMunimStore } from "@/lib/store";
 import { VAD } from "@/lib/voice/vad";
 import { AudioPlayer } from "@/lib/voice/player";
@@ -66,6 +67,14 @@ export default function CallPage() {
   const isTranscribingRef = useRef(false);
   const consecutiveErrorsRef = useRef(0);
   const hasShownFallbackToastRef = useRef(false);
+  const vadResumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearVadResumeTimer = useCallback(() => {
+    if (vadResumeTimerRef.current) {
+      clearTimeout(vadResumeTimerRef.current);
+      vadResumeTimerRef.current = null;
+    }
+  }, []);
 
   // Keep TTS lang in sync
   useEffect(() => {
@@ -86,8 +95,14 @@ export default function CallPage() {
   const sendToLLM = useCallback(
     async (userText: string, options?: { hideUserMessage?: boolean }) => {
       // Interrupt any lingering playback cleanly before replying
+      clearVadResumeTimer();
       playerRef.current?.abort();
       vadRef.current?.pause();
+      try {
+        browserSttRef.current?.stop();
+      } catch {
+        // Ignore if already stopped
+      }
       store.setCallState("thinking");
       chatAbortRef.current?.abort();
       chatAbortRef.current = new AbortController();
@@ -344,20 +359,37 @@ export default function CallPage() {
 
   // ── Start the call ─────────────────────────────────────────────────────────
   const startCall = useCallback(async () => {
+    const current = useMunimStore.getState().callState;
+    if (current !== "idle" && current !== "ended") return;
     store.setCallState("connecting");
 
     // AudioPlayer with callbacks that coordinate VAD pausing and latency logging
     playerRef.current = new AudioPlayer({
       onStart: () => {
+        clearVadResumeTimer();
         vadRef.current?.pause();
+        try {
+          browserSttRef.current?.stop();
+        } catch {
+          // Ignore if already stopped
+        }
         store.setCallState("speaking");
       },
       onEnd: () => {
-        // Resume VAD only when speech playback completes
-        vadRef.current?.resume();
-        if (useMunimStore.getState().callState !== "ended") {
+        // Add a short cooldown after Munim finishes speaking so speaker echo does not re-trigger mic
+        clearVadResumeTimer();
+        vadResumeTimerRef.current = setTimeout(() => {
+          vadResumeTimerRef.current = null;
+          const current = useMunimStore.getState().callState;
+          if (current === "ended" || current === "idle") return;
+          vadRef.current?.resume();
           store.setCallState("listening");
-        }
+          try {
+            browserSttRef.current?.start();
+          } catch {
+            // Ignore if already started
+          }
+        }, 250);
       },
       onTTSFirstByte: (latencyMs) => {
         setLatency((l) => ({ ...l, tts: latencyMs }));
@@ -375,23 +407,39 @@ export default function CallPage() {
         minSpeechDurationMs: 350,
         onLevelChange: setMicLevel,
         onSpeechStart: () => {
-          if (playerRef.current?.isPlaying) {
-            // Barge-in: interrupt TTS immediately
-            playerRef.current.abort();
-            chatAbortRef.current?.abort();
-            voiceCoordinator.reset();
+          // Never auto-interrupt Munim on external audio/noise; only Space/Orb interrupts
+          const current = useMunimStore.getState().callState;
+          if (
+            playerRef.current?.isPlaying ||
+            current === "speaking" ||
+            current === "thinking" ||
+            current === "ended" ||
+            current === "idle"
+          ) {
+            return;
           }
           store.setCallState("listening");
         },
         onSpeechEnd: async (blob) => {
-          if (isTranscribingRef.current || playerRef.current?.isPlaying) return;
+          const current = useMunimStore.getState().callState;
+          if (
+            isTranscribingRef.current ||
+            playerRef.current?.isPlaying ||
+            current === "speaking" ||
+            current === "thinking" ||
+            current === "ended" ||
+            current === "idle"
+          ) {
+            return;
+          }
 
           store.setCallState("thinking");
           const text = await transcribeBlob(blob);
           if (text && text.trim().length > 0) {
             await sendToLLM(text.trim());
           } else {
-            if (useMunimStore.getState().callState !== "speaking") {
+            const afterState = useMunimStore.getState().callState;
+            if (afterState !== "speaking" && afterState !== "ended" && afterState !== "idle") {
               vadRef.current?.resume();
               store.setCallState("listening");
             }
@@ -430,6 +478,12 @@ export default function CallPage() {
     let partialId = "";
 
     sr.onresult = (e: { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => {
+      // Never process or interrupt while Munim is speaking, thinking, or call isn't active
+      const current = useMunimStore.getState().callState;
+      if (current === "speaking" || current === "thinking" || current === "idle" || current === "ended" || current === "connecting") {
+        return;
+      }
+
       const resultsArr = Array.from(e.results);
       const transcript = resultsArr
         .map((r) => r[0].transcript)
@@ -457,25 +511,54 @@ export default function CallPage() {
     };
 
     sr.onend = () => {
-      if (store.callState === "listening") sr.start();
+      if (useMunimStore.getState().callState === "listening") {
+        try {
+          sr.start();
+        } catch {
+          // Ignore duplicate start errors
+        }
+      }
     };
 
     browserSttRef.current = sr;
-    sr.start();
+    if (useMunimStore.getState().callState === "listening") {
+      try {
+        sr.start();
+      } catch {
+        // Ignore
+      }
+    }
 
     return () => {
-      sr.stop();
+      try {
+        sr.stop();
+      } catch {
+        // Ignore
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usesBrowserFallback, language]);
 
-  // ── Auto-start call on mount ──────────────────────────────────────────────
+  // ── Reset stale call state on mount & clean up resources on unmount ───────
   useEffect(() => {
-    if (callState === "idle") {
-      startCall();
+    const initialState = useMunimStore.getState().callState;
+    if (initialState !== "idle") {
+      useMunimStore.getState().resetCall();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+
+    return () => {
+      clearVadResumeTimer();
+      vadRef.current?.stop();
+      playerRef.current?.abort();
+      chatAbortRef.current?.abort();
+      try {
+        browserSttRef.current?.stop();
+      } catch {
+        // Ignore
+      }
+      voiceCoordinator.reset();
+    };
+  }, [clearVadResumeTimer]);
 
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
   useEffect(() => {
@@ -496,33 +579,58 @@ export default function CallPage() {
 
   // ── Orb press handler ─────────────────────────────────────────────────────
   const handleOrbPress = useCallback(() => {
-    if (callState === "speaking") {
-      // Interrupt
+    if (callState === "idle") {
+      startCall();
+    } else if (callState === "speaking") {
+      // Manual interrupt (Space or Orb click only)
+      clearVadResumeTimer();
       playerRef.current?.abort();
       chatAbortRef.current?.abort();
       voiceCoordinator.reset();
       vadRef.current?.resume();
       store.setCallState("listening");
+      if (usesBrowserFallback) {
+        try {
+          browserSttRef.current?.start();
+        } catch {
+          // Ignore
+        }
+      }
     } else if (callState === "listening") {
       // Allow tapping Orb / Space while speaking to immediately send utterance
       vadRef.current?.forceStopSpeech();
     } else if (callState === "thinking") {
-      // Cancel LLM
+      // Cancel LLM (Space or Orb click only)
+      clearVadResumeTimer();
       chatAbortRef.current?.abort();
       voiceCoordinator.reset();
       vadRef.current?.resume();
       store.setCallState("listening");
+      if (usesBrowserFallback) {
+        try {
+          browserSttRef.current?.start();
+        } catch {
+          // Ignore
+        }
+      }
     }
-  }, [callState, store]);
+  }, [callState, startCall, clearVadResumeTimer, store, usesBrowserFallback]);
 
   // ── End call ──────────────────────────────────────────────────────────────
   const endCall = useCallback(() => {
+    clearVadResumeTimer();
     vadRef.current?.stop();
     playerRef.current?.abort();
     chatAbortRef.current?.abort();
-    browserSttRef.current?.stop();
-    store.setCallState("ended");
-  }, [store]);
+    try {
+      browserSttRef.current?.stop();
+    } catch {
+      // Ignore
+    }
+    voiceCoordinator.reset();
+    store.resetCall();
+    router.push("/");
+  }, [clearVadResumeTimer, store, router]);
 
   const handleMuteToggle = useCallback(() => {
     const nextMuted = !store.muted;
@@ -554,10 +662,20 @@ export default function CallPage() {
             {/* Orb area */}
             <div className="flex flex-col items-center py-8 gap-4">
               <Orb onPress={handleOrbPress} level={micLevel} />
+              {callState === "idle" && (
+                <button
+                  onClick={startCall}
+                  className="inline-flex items-center gap-2.5 px-6 py-3 rounded-full bg-gradient-to-r from-[#E40046] to-[#B80038] text-white text-sm font-medium shadow-[0_8px_28px_rgba(228,0,70,0.4)] hover:brightness-110 active:scale-[0.98] transition-all"
+                >
+                  <Phone className="w-4 h-4" />
+                  Start your call
+                </button>
+              )}
               <div className="text-sm text-[var(--color-ink-muted)]">
-                {callState === "listening" && (store.muted ? "Muted" : "Listening… (speak or tap Orb to send)")}
-                {callState === "thinking" && "Munim is thinking…"}
-                {callState === "speaking" && "Munim is speaking…"}
+                {callState === "idle" && "Ready when you are — press Start your call to connect"}
+                {callState === "listening" && (store.muted ? "Muted" : "Listening… (speak or press Space to send)")}
+                {callState === "thinking" && "Munim is thinking… (press Space to pause)"}
+                {callState === "speaking" && "Munim is speaking… (press Space to pause)"}
                 {callState === "connecting" && "Connecting…"}
                 {callState === "ended" && "Call ended"}
               </div>
@@ -628,6 +746,7 @@ export default function CallPage() {
               <GuidePanel
                 onSendExample={(text) => sendToLLM(text)}
                 disabled={
+                  callState === "idle" ||
                   callState === "thinking" ||
                   callState === "connecting" ||
                   callState === "ended"

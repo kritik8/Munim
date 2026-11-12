@@ -109,10 +109,10 @@ export function Orb({ onPress, level = 0 }: OrbProps) {
           </div>
         )}
 
-        {/* Idle state */}
+        {/* Idle / Connecting state */}
         {!isListening && !isSpeaking && !isThinking && (
-          <div className="text-white/60 text-xs text-center px-2 leading-tight">
-            Tap to<br />speak
+          <div className="text-white/80 text-xs font-medium text-center px-2 leading-tight">
+            {callState === "connecting" ? "Connecting…" : "Start\ncall"}
           </div>
         )}
       </motion.div>

@@ -233,3 +233,4 @@ export function GuidePanel({ onSendExample, disabled = false }: GuidePanelProps)
     </div>
   );
 }
+

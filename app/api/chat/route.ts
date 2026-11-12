@@ -128,10 +128,12 @@ export async function POST(req: NextRequest) {
               sentenceBuffer += delta.content;
               send("text_delta", { text: delta.content });
 
-              for (const char of delta.content) {
-                if (isSentenceEnd(char) && sentenceBuffer.trim().length > 4) {
-                  send("sentence", { text: sentenceBuffer.trim() });
-                  sentenceBuffer = "";
+              let match: RegExpMatchArray | null;
+              while ((match = sentenceBuffer.match(/^([\s\S]*?[.!?।])\s+([\s\S]*)$/))) {
+                const candidate = match[1].trim();
+                sentenceBuffer = match[2];
+                if (candidate.length > 4) {
+                  send("sentence", { text: candidate });
                 }
               }
             }
