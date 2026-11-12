@@ -40,10 +40,10 @@ export function ToastContainer() {
             exit={{ opacity: 0, x: 20 }}
             className={`flex items-center gap-3 px-4 py-3 rounded-2xl shadow-[var(--shadow-float)] max-w-xs text-sm ${
               t.type === "error"
-                ? "bg-red-50 border border-red-200 text-red-700"
+                ? "bg-red-950/80 border border-red-500/40 text-red-200"
                 : t.type === "success"
-                ? "bg-[var(--color-success-soft)] border border-[var(--color-success)]/30 text-[var(--color-success)]"
-                : "bg-white border border-[var(--color-hairline)] text-[var(--color-ink)]"
+                ? "bg-emerald-950/80 border border-emerald-500/40 text-emerald-200"
+                : "bg-[#14151B] border border-white/10 text-white"
             }`}
           >
             {t.type === "error" && <AlertCircle size={16} className="flex-shrink-0" />}

@@ -33,14 +33,14 @@ function MetricCard({
   const fmt = format ?? ((n: number) => n.toLocaleString("en-IN") + unit);
 
   return (
-    <div className="p-4 rounded-2xl border border-[var(--color-hairline)] dark:border-[var(--color-hairline-dark)] bg-[var(--color-surface)] dark:bg-[var(--color-surface-dark)]">
-      <div className="text-xs text-[var(--color-ink-faint)] mb-2">{label}</div>
-      <div className="font-semibold text-lg text-[var(--color-ink)]">
+    <div className="p-4 rounded-2xl border border-white/10 bg-[#14151B]">
+      <div className="text-xs text-slate-400 mb-2">{label}</div>
+      <div className="font-semibold text-lg text-white">
         {fmt(now)}
       </div>
       <div
         className={`flex items-center gap-1 text-xs mt-1 ${
-          isPositive ? "text-[var(--color-success)]" : "text-[var(--color-accent)]"
+          isPositive ? "text-emerald-400" : "text-[#FF4F7E]"
         }`}
       >
         {isPositive ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
@@ -60,17 +60,17 @@ export function SellerPanel() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <div className="font-semibold text-sm">{SELLER.sellerName}</div>
-          <div className="text-xs text-[var(--color-ink-faint)]">
+          <div className="font-semibold text-sm text-white">{SELLER.sellerName}</div>
+          <div className="text-xs text-slate-400">
             {SELLER.category} · {SELLER.location}
           </div>
         </div>
         <button
           onClick={() => setShowAssumptions(!showAssumptions)}
           aria-label="Show assumptions"
-          className="p-1.5 rounded-lg hover:bg-[var(--color-surface-raised)] transition-colors"
+          className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
         >
-          <Info size={16} className="text-[var(--color-ink-faint)]" />
+          <Info size={16} className="text-slate-400" />
         </button>
       </div>
 
@@ -79,11 +79,11 @@ export function SellerPanel() {
         <motion.div
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
-          className="p-4 rounded-2xl bg-[var(--color-warning-soft)] border border-[var(--color-warning)]/20 text-xs space-y-1.5"
+          className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs space-y-1.5"
         >
-          <div className="font-medium text-[var(--color-warning)]">Assumptions</div>
+          <div className="font-medium text-amber-400">Assumptions</div>
           {ASSUMPTIONS.map((a, i) => (
-            <div key={i} className="text-[var(--color-ink-muted)]">
+            <div key={i} className="text-slate-300">
               {i + 1}. {a}
             </div>
           ))}
@@ -125,9 +125,9 @@ export function SellerPanel() {
         <motion.div
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: "auto" }}
-          className="p-4 rounded-2xl border border-[var(--color-hairline)] dark:border-[var(--color-hairline-dark)] bg-[var(--color-surface)] dark:bg-[var(--color-surface-dark)]"
+          className="p-4 rounded-2xl border border-white/10 bg-[#14151B]"
         >
-          <div className="text-xs text-[var(--color-ink-faint)] mb-3">
+          <div className="text-xs text-slate-400 mb-3">
             Gap breakdown — {formatINR(diagnosis.gap)} (−{diagnosis.gapPct}%)
           </div>
           <CauseBar />
@@ -149,29 +149,29 @@ function CauseBar() {
           initial={{ width: 0 }}
           animate={{ width: `${stockPct}%` }}
           transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
-          className="bg-[var(--color-accent)] rounded-l-full"
+          className="bg-[#E40046] rounded-l-full"
         />
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${cancelPct}%` }}
           transition={{ duration: 0.8, delay: 0.4, ease: "easeOut" }}
-          className="bg-[var(--color-warning)] rounded-r-full"
+          className="bg-amber-500 rounded-r-full"
         />
       </div>
 
       {/* Legend */}
       <div className="space-y-1.5">
         <div className="flex items-center gap-2 text-xs">
-          <div className="w-2.5 h-2.5 rounded-sm bg-[var(--color-accent)] flex-shrink-0" />
-          <span className="text-[var(--color-ink-muted)] flex-1">Stock-outs &amp; visibility</span>
-          <span className="font-mono font-medium text-[var(--color-ink)]">
+          <div className="w-2.5 h-2.5 rounded-sm bg-[#E40046] flex-shrink-0" />
+          <span className="text-slate-400 flex-1">Stock-outs &amp; visibility</span>
+          <span className="font-mono font-medium text-white">
             {formatINR(diagnosis.stockoutVisibilityLoss)}
           </span>
         </div>
         <div className="flex items-center gap-2 text-xs">
-          <div className="w-2.5 h-2.5 rounded-sm bg-[var(--color-warning)] flex-shrink-0" />
-          <span className="text-[var(--color-ink-muted)] flex-1">Excess cancellations</span>
-          <span className="font-mono font-medium text-[var(--color-ink)]">
+          <div className="w-2.5 h-2.5 rounded-sm bg-amber-500 flex-shrink-0" />
+          <span className="text-slate-400 flex-1">Excess cancellations</span>
+          <span className="font-mono font-medium text-white">
             {formatINR(diagnosis.cancellationLoss)}
           </span>
         </div>

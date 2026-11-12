@@ -24,7 +24,7 @@ export function ShortcutHint({ className = "" }: ShortcutHintProps) {
 
 function Keycap({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="inline-flex items-center px-1.5 py-0.5 rounded border border-[var(--color-hairline)] dark:border-[var(--color-hairline-dark)] font-mono text-[10px] bg-[var(--color-surface-raised)] dark:bg-[var(--color-surface-dark)] text-[var(--color-ink-muted)]">
+    <kbd className="inline-flex items-center px-1.5 py-0.5 rounded border border-white/10 font-mono text-[10px] bg-white/5 text-slate-300">
       {children}
     </kbd>
   );

@@ -60,11 +60,11 @@ export function Bento() {
       <div className="text-center mb-12">
         <h2
           id="features-heading"
-          className="text-3xl sm:text-4xl font-bold tracking-tight"
+          className="text-3xl sm:text-4xl font-bold tracking-tight text-white"
         >
           Built to own the problem.
         </h2>
-        <p className="mt-3 text-[var(--color-ink-muted)]">
+        <p className="mt-3 text-slate-400">
           Not just answer questions.
         </p>
       </div>
@@ -79,9 +79,9 @@ export function Bento() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.4, delay: i * 0.08 }}
-              className={`${tile.span} p-6 rounded-3xl border border-[var(--color-hairline)] bg-[var(--color-surface)] shadow-[var(--shadow-card)] ${
+              className={`${tile.span} p-6 rounded-3xl border border-white/10 bg-[#13141B] shadow-[var(--shadow-card)] ${
                 tile.accent
-                  ? "bg-[var(--color-accent)] text-white border-transparent"
+                  ? "bg-gradient-to-br from-[#E40046] to-[#99002B] text-white border-transparent shadow-lg shadow-red-950/40"
                   : ""
               }`}
             >
@@ -89,20 +89,18 @@ export function Bento() {
                 className={`w-10 h-10 rounded-2xl flex items-center justify-center mb-4 ${
                   tile.accent
                     ? "bg-white/20"
-                    : "bg-[var(--color-accent-soft)]"
+                    : "bg-[rgba(228,0,70,0.15)]"
                 }`}
               >
                 <Icon
                   size={20}
                   className={
-                    tile.accent ? "text-white" : "text-[var(--color-accent)]"
+                    tile.accent ? "text-white" : "text-[#FF4F7E]"
                   }
                 />
               </div>
               <h3
-                className={`font-semibold mb-1 ${
-                  tile.accent ? "text-white" : "text-slate-900"
-                }`}
+                className={`font-semibold mb-1 text-white`}
               >
                 {tile.title}
               </h3>
@@ -110,7 +108,7 @@ export function Bento() {
                 className={`text-sm leading-relaxed ${
                   tile.accent
                     ? "text-white/80"
-                    : "text-slate-600"
+                    : "text-slate-400"
                 }`}
               >
                 {tile.body}
@@ -155,20 +153,20 @@ export function Faq() {
     >
       <h2
         id="faq-heading"
-        className="text-3xl font-bold tracking-tight text-center mb-10 text-slate-900"
+        className="text-3xl font-bold tracking-tight text-center mb-10 text-white"
       >
         FAQs
       </h2>
-      <div className="divide-y divide-[var(--color-hairline)]">
+      <div className="divide-y divide-white/10">
         {FAQ_ITEMS.map((item) => (
           <details key={item.q} className="group py-5">
-            <summary className="cursor-pointer list-none flex items-center justify-between gap-4 font-semibold text-slate-900 hover:text-[var(--color-accent)] transition-colors">
+            <summary className="cursor-pointer list-none flex items-center justify-between gap-4 font-semibold text-white hover:text-[#FF4F7E] transition-colors">
               <span>{item.q}</span>
               <span className="text-slate-400 group-open:rotate-45 transition-transform flex-shrink-0 text-xl leading-none">
                 +
               </span>
             </summary>
-            <p className="mt-3 text-sm text-slate-600 leading-relaxed">
+            <p className="mt-3 text-sm text-slate-300 leading-relaxed">
               {item.a}
             </p>
           </details>
@@ -180,9 +178,9 @@ export function Faq() {
 
 export function Footer() {
   return (
-    <footer className="border-t border-[var(--color-hairline)] py-8 px-4 text-center">
-      <p className="text-xs text-[var(--color-ink-faint)]">{PRODUCT_DISCLAIMER}</p>
-      <p className="text-xs text-[var(--color-ink-faint)] mt-1">
+    <footer className="border-t border-white/10 py-8 px-4 text-center">
+      <p className="text-xs text-slate-500">{PRODUCT_DISCLAIMER}</p>
+      <p className="text-xs text-slate-500 mt-1">
         Made with care for the Snapdeal Seller Experience team assignment.
       </p>
     </footer>

@@ -8,9 +8,9 @@ export default function HomePage() {
       <FloatingNav />
       <Hero />
       <div id="how-it-works" className="py-16 px-4 max-w-3xl mx-auto text-center">
-        <h2 className="text-3xl font-bold tracking-tight mb-4">How it works</h2>
-        <p className="text-[var(--color-ink-muted)] leading-relaxed">
-          Click <strong>Start a call</strong>. Munim greets you with your real numbers —
+        <h2 className="text-3xl font-bold tracking-tight mb-4 text-white">How it works</h2>
+        <p className="text-slate-400 leading-relaxed">
+          Click <strong className="text-white">Start a call</strong>. Munim greets you with your real numbers —
           sales, orders, and stock-outs. Answer one question at a time, in any language.
           Munim diagnoses the root cause, recommends actions, and executes them live.
           The call ends with a spoken and on-screen summary you can download.
@@ -24,12 +24,12 @@ export default function HomePage() {
           ].map((step) => (
             <div
               key={step.n}
-              className="p-4 rounded-2xl border border-[var(--color-hairline)] dark:border-[var(--color-hairline-dark)] text-center"
+              className="p-4 rounded-2xl border border-white/10 bg-[#13141B] text-center"
             >
-              <div className="text-2xl font-bold font-mono text-[var(--color-accent)]">
+              <div className="text-2xl font-bold font-mono text-[#E40046]">
                 {step.n}
               </div>
-              <div className="text-sm text-[var(--color-ink-muted)] mt-1">
+              <div className="text-sm text-slate-400 mt-1">
                 {step.label}
               </div>
             </div>

@@ -46,20 +46,20 @@ export function ActionFeed() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.25 }}
-            className="flex items-start gap-3 p-3 rounded-2xl bg-[var(--color-surface)] dark:bg-[var(--color-surface-dark)] border border-[var(--color-hairline)] dark:border-[var(--color-hairline-dark)]"
+            className="flex items-start gap-3 p-3 rounded-2xl bg-[#14151B] border border-white/10"
           >
             <StatusIcon status={action.status} />
             <div className="min-w-0 flex-1">
-              <div className="font-medium text-sm text-[var(--color-ink)]">
+              <div className="font-medium text-sm text-white">
                 {TOOL_LABELS[action.toolName] ?? action.toolName}
               </div>
               {typeof action.result?.message === "string" && (
-                <div className="text-xs text-[var(--color-ink-muted)] mt-0.5 leading-relaxed">
+                <div className="text-xs text-slate-400 mt-0.5 leading-relaxed">
                   {action.result.message}
                 </div>
               )}
               {action.status === "running" && !action.result && (
-                <div className="text-xs text-[var(--color-ink-faint)] mt-0.5">
+                <div className="text-xs text-slate-500 mt-0.5">
                   Running…
                 </div>
               )}
@@ -67,12 +67,12 @@ export function ActionFeed() {
             <span
               className={`text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${
                 action.status === "done"
-                  ? "bg-[var(--color-success-soft)] text-[var(--color-success)]"
+                  ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
                   : action.status === "running"
-                  ? "bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
+                  ? "bg-red-500/20 text-red-400 border border-red-500/30"
                   : action.status === "error"
-                  ? "bg-red-50 text-red-600"
-                  : "bg-[var(--color-hairline)] text-[var(--color-ink-faint)]"
+                  ? "bg-red-950/60 text-red-300 border border-red-800/40"
+                  : "bg-white/10 text-slate-400"
               }`}
             >
               {action.status}

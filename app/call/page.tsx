@@ -544,7 +544,7 @@ export default function CallPage() {
             {/* Filter tabs */}
             <div
               role="tablist"
-              className="flex gap-1 p-1 rounded-2xl bg-[var(--color-surface-raised)] dark:bg-[var(--color-surface-dark)] border border-[var(--color-hairline)] dark:border-[var(--color-hairline-dark)]"
+              className="flex gap-1 p-1 rounded-2xl bg-[#14151B] border border-white/10"
             >
               {TABS.map((tab) => (
                 <button
@@ -556,13 +556,13 @@ export default function CallPage() {
                   }
                   className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all ${
                     activeTab === tab.id
-                      ? "bg-white shadow-sm text-[var(--color-ink)]"
-                      : "text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
+                      ? "bg-white/15 text-white shadow-sm"
+                      : "text-slate-400 hover:text-white"
                   }`}
                 >
                   {tab.label}
                   {tabCounts[tab.id as Tab] > 0 && (
-                    <span className="px-1.5 py-0.5 rounded-full bg-[var(--color-hairline)] dark:bg-[var(--color-hairline-dark)] text-[var(--color-ink-faint)] text-[10px]">
+                    <span className="px-1.5 py-0.5 rounded-full bg-white/10 text-slate-300 text-[10px]">
                       {tabCounts[tab.id as Tab]}
                     </span>
                   )}

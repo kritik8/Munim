@@ -40,12 +40,12 @@ ${summary.nextSteps.map((n) => `- ${n}`).join("\n")}
       initial={{ opacity: 0, scale: 0.97 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.4 }}
-      className="p-6 rounded-3xl border border-[var(--color-accent)] bg-[var(--color-surface)] dark:bg-[var(--color-surface-dark)] shadow-[var(--shadow-float)]"
+      className="p-6 rounded-3xl border border-[#E40046]/40 bg-[#14151B] shadow-[var(--shadow-float)]"
     >
       <div className="flex items-center justify-between mb-5">
         <div>
-          <div className="font-semibold text-lg">Call Summary</div>
-          <div className="text-xs text-[var(--color-ink-faint)]">
+          <div className="font-semibold text-lg text-white">Call Summary</div>
+          <div className="text-xs text-slate-400">
             {new Date(summary.ts).toLocaleString("en-IN")}
           </div>
         </div>
@@ -53,14 +53,14 @@ ${summary.nextSteps.map((n) => `- ${n}`).join("\n")}
           <button
             onClick={copyToClipboard}
             aria-label="Copy summary"
-            className="p-2 rounded-xl border border-[var(--color-hairline)] dark:border-[var(--color-hairline-dark)] hover:bg-[var(--color-surface-raised)] transition-colors"
+            className="p-2 rounded-xl border border-white/10 hover:bg-white/10 text-slate-300 transition-colors"
           >
             <Copy size={15} />
           </button>
           <button
             onClick={downloadMd}
             aria-label="Download as Markdown"
-            className="p-2 rounded-xl border border-[var(--color-hairline)] dark:border-[var(--color-hairline-dark)] hover:bg-[var(--color-surface-raised)] transition-colors"
+            className="p-2 rounded-xl border border-white/10 hover:bg-white/10 text-slate-300 transition-colors"
           >
             <Download size={15} />
           </button>

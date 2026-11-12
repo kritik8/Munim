@@ -80,17 +80,17 @@ void main() {
   float veins = 0.5 + 0.5 * sin(fluid * 6.0 + warp.x * 2.5 + p.y * 1.4);
   float signal = clamp(fluid * 0.56 + broadClouds * 0.36 + veins * 0.08, 0.0, 1.0);
 
-  vec3 deep = vec3(0.76, 0.90, 0.96);
-  vec3 mid = vec3(0.25, 0.57, 0.73);
-  vec3 bright = vec3(0.10, 0.40, 0.61);
-  vec3 color = mix(deep, mid, smoothstep(0.14, 0.78, signal));
-  color = mix(color, bright, smoothstep(0.48, 0.90, signal));
+  vec3 deep = vec3(0.25, 0.01, 0.06);   // deep dark wine / dark crimson
+  vec3 mid = vec3(0.76, 0.00, 0.18);    // rich deep scarlet red
+  vec3 bright = vec3(1.0, 0.14, 0.30);  // glowing hot crimson highlight
+  vec3 color = mix(deep, mid, smoothstep(0.12, 0.76, signal));
+  color = mix(color, bright, smoothstep(0.48, 0.92, signal));
 
-  float dotShade = mix(0.78, 1.0, bayer4(cell) / 15.0);
+  float dotShade = mix(0.72, 1.0, bayer4(cell) / 15.0);
   color *= dotShade;
 
   float fromTop = 1.0 - uv.y;
-  float alpha = 1.0 - smoothstep(0.36, 0.78, fromTop);
+  float alpha = 1.0 - smoothstep(0.22, 0.86, fromTop);
   gl_FragColor = vec4(color * alpha, alpha);
 }
 `;

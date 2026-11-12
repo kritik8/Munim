@@ -31,8 +31,8 @@ export function Transcript() {
             <div
               className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
                 entry.role === "seller"
-                  ? "bg-[var(--color-accent-soft)] text-[var(--color-ink)]"
-                  : `bg-[var(--color-surface)] border border-[var(--color-hairline)] border-l-2 border-l-[var(--color-accent)] text-[var(--color-ink)] ${
+                  ? "bg-[#E40046]/20 border border-[#E40046]/30 text-white"
+                  : `bg-[#161720] border border-white/10 border-l-2 border-l-[#E40046] text-slate-200 ${
                       entry.partial ? "opacity-70" : ""
                     }`
               }`}

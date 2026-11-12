@@ -1,32 +1,32 @@
 /**
  * app/globals.css
- * Fluid Light-Mode Design tokens for Munim — Sky-Blue aesthetic.
+ * Fluid Dark-Mode Design tokens for Munim — Deep Red & Dark Grey aesthetic.
  */
 @import "tailwindcss";
 
 @theme {
-  /* ── Canvas & Surfaces (Crisp light) ── */
-  --color-canvas: #F8FAFC;
-  --color-surface: #FFFFFF;
-  --color-surface-raised: #F0F7FF;
+  /* ── Canvas & Surfaces (Deep charcoal & dark grey) ── */
+  --color-canvas: #0A0B0E;
+  --color-surface: #13141B;
+  --color-surface-raised: #1C1D26;
 
-  /* ── Ink ── */
-  --color-ink: #0F172A;
-  --color-ink-muted: #475569;
-  --color-ink-faint: #94A3B8;
-  --color-hairline: #E2E8F0;
+  /* ── Ink (Crisp light text) ── */
+  --color-ink: #F8FAFC;
+  --color-ink-muted: #94A3B8;
+  --color-ink-faint: #64748B;
+  --color-hairline: #232530;
 
-  /* ── Accent (Sky / Cyan Blue) ── */
-  --color-accent: #0284C7;
-  --color-accent-soft: #E0F2FE;
-  --color-accent-hover: #0369A1;
+  /* ── Accent (Snapdeal Deep Red & Crimson) ── */
+  --color-accent: #E40046;
+  --color-accent-soft: rgba(228, 0, 70, 0.15);
+  --color-accent-hover: #C80036;
 
   /* ── Semantic ── */
-  --color-success: #059669;
-  --color-success-soft: #ECFDF5;
-  --color-warning: #D97706;
-  --color-warning-soft: #FEF3C7;
-  --color-error: #DC2626;
+  --color-success: #10B981;
+  --color-success-soft: rgba(16, 185, 129, 0.15);
+  --color-warning: #F59E0B;
+  --color-warning-soft: rgba(245, 158, 11, 0.15);
+  --color-error: #EF4444;
 
   /* ── Radius ── */
   --radius-pill: 9999px;
@@ -34,16 +34,16 @@
   --radius-sm: 14px;
 
   /* ── Fluid Shadows ── */
-  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 12px 32px -8px rgba(14, 165, 233, 0.08);
-  --shadow-float: 0 4px 6px -1px rgba(15, 23, 42, 0.05), 0 20px 40px -12px rgba(2, 132, 199, 0.14);
-  --shadow-orb: 0 8px 32px rgba(2, 132, 199, 0.35), inset 0 2px 4px rgba(255, 255, 255, 0.6);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px -8px rgba(0, 0, 0, 0.5);
+  --shadow-float: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 20px 40px -12px rgba(228, 0, 70, 0.2);
+  --shadow-orb: 0 8px 32px rgba(228, 0, 70, 0.45), inset 0 2px 4px rgba(255, 255, 255, 0.4);
 
-  /* ── Dark fallback (locked to crisp light mode) ── */
-  --color-canvas-dark: #F8FAFC;
-  --color-surface-dark: #FFFFFF;
-  --color-hairline-dark: #E2E8F0;
-  --color-ink-dark: #0F172A;
-  --color-ink-muted-dark: #475569;
+  /* ── Dark fallback ── */
+  --color-canvas-dark: #0A0B0E;
+  --color-surface-dark: #13141B;
+  --color-hairline-dark: #232530;
+  --color-ink-dark: #F8FAFC;
+  --color-ink-muted-dark: #94A3B8;
 
   /* ── Fonts ── */
   --font-sans: var(--font-geist-sans), system-ui, sans-serif;
@@ -51,7 +51,7 @@
 }
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 body {
@@ -73,7 +73,7 @@ body {
   position: absolute;
   inset: 0 0 auto;
   width: 100%;
-  height: 480px;
+  height: 520px;
   pointer-events: none;
 }
 
@@ -81,18 +81,18 @@ body {
   z-index: -1;
   overflow: hidden;
   background:
-    linear-gradient(to bottom, transparent 0%, #F8FAFC 100%),
-    radial-gradient(ellipse at 22% 12%, rgb(91 177 218 / 62%) 0%, transparent 54%),
-    radial-gradient(ellipse at 76% 10%, rgb(40 126 170 / 48%) 0%, transparent 58%),
-    linear-gradient(to bottom, #8bc8e4 0%, #c7e7f4 58%, #F8FAFC 100%);
-  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 38%, transparent 84%);
-  mask-image: linear-gradient(to bottom, #000 0%, #000 38%, transparent 84%);
+    linear-gradient(to bottom, transparent 0%, #0A0B0E 100%),
+    radial-gradient(ellipse at 22% 12%, rgba(228, 0, 70, 0.45) 0%, transparent 54%),
+    radial-gradient(ellipse at 76% 10%, rgba(160, 0, 40, 0.38) 0%, transparent 58%),
+    linear-gradient(to bottom, #520014 0%, #200007 58%, #0A0B0E 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 42%, transparent 88%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 42%, transparent 88%);
 }
 
 .fluid-hero__fallback::after {
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(rgb(11 73 105 / 32%) 0.8px, transparent 1px);
+  background-image: radial-gradient(rgba(228, 0, 70, 0.22) 0.8px, transparent 1px);
   background-size: 4px 4px;
   content: "";
 }
@@ -114,11 +114,11 @@ body {
 
 /* ── Glass Pill Navigation ── */
 .glass-pill {
-  background: rgba(255, 255, 255, 0.78);
+  background: rgba(19, 20, 27, 0.82);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(226, 232, 240, 0.85);
-  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.6);
 }
 
 /* ── Scrollbar styling ── */
